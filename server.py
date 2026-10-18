@@ -10552,41 +10552,71 @@ async def arch_plan_from_spec(
                 "material, closed}], openings: [{id, wall, kind: 'door'|'window', offset, "
                 "width, swing, hand, sill, height, tag}], stairs: [{id, start, direction_deg, "
                 "width, risers, riser_height, going, kind, turn}], rooms: [{id, name, number, "
-                "at}], chains: {sides: ['bottom','left']}, schedules: [{kind: "
+                "at}], fixtures: [{id, name (arch_catalogue_list), at, rotation}], "
+                "chains: {sides: ['bottom','left']}, schedules: [{kind: "
                 "'doors'|'windows'|'rooms', at: [x,y]}]}"
             )
         ),
     ],
+    dry_run: Annotated[
+        bool,
+        Field(
+            default=False,
+            description="Validate and run the completeness checks in memory; draw nothing.",
+        ),
+    ] = False,
+    grid: Annotated[
+        dict | None,
+        Field(
+            default=None,
+            description=(
+                "{x_axes: [...], y_axes: [...], tolerance: mm} - checks this plan's walls "
+                "for coordination against a structural grid's axis positions. Draws nothing "
+                "(arch_grid draws the axis lines and bubbles) and invents no structural design."
+            ),
+        ),
+    ] = None,
     ctx: Context = None,
 ) -> dict:
     """A whole plan drawn inside one transaction: walls with their hosted doors and
-    windows, stairs, room labels whose areas are measured off the walls just drawn,
-    the exterior dimension chains and the door / window / room schedules.
+    windows, stairs, catalogue fixtures, room labels whose areas are measured off
+    the walls just drawn, the exterior dimension chains and the door / window /
+    room schedules.
 
     Every item is validated before the transaction opens, so a refusal leaves the
     drawing untouched and names its path (`walls[1].thickness: ...`,
-    `rooms[0].area: ...`). What only the drawing can refuse - a room point in no
-    closed face - rolls the transaction back, and so does a cancelled request (the
-    rollback runs under an anyio shield). The result carries each step's own
-    result, the wall engine's `omitted` list and the three `arch_*` critique
-    focuses run over the committed plan.
+    `rooms[0].area: ...`, `fixtures[0].name: ...`). What only the drawing can
+    refuse - a room point in no closed face - rolls the transaction back, and so
+    does a cancelled request (the rollback runs under an anyio shield). The result
+    carries each step's own result, the wall engine's `omitted` list, the three
+    `arch_*` critique focuses run over the committed plan, and `completeness` -
+    rule-based, non-blocking findings (a missing door, a room no door or window on
+    its own walls reaches, an unlabelled face, a duplicate tag, a fixture outside
+    every room, a wall off the `grid`) from `engineering.arch.completeness`. None
+    of it is a building-code or structural check; every message says so.
+
+    `dry_run=True` validates and runs the completeness checks without opening a
+    transaction or touching the drawing - call it first, read `completeness` for
+    `severity: "error"` entries (no door anywhere, an unjoined wall end, walls
+    with no room named), and ask about those before drawing for real.
 
     Refused by name: an unknown key, no walls, an unknown language or material, a
     non-finite or non-positive number, an arc segment in a wall axis, an opening
     that overlaps another or runs past its wall segment (both ids named), a typed
-    room `area` (areas are measured, never typed), an unknown chain side or
-    schedule kind, and a transaction that cannot be opened. Catalogue furniture,
-    the grid and symbols are separate tools (`arch_catalogue_insert`, `arch_grid`,
-    `arch_symbol`).
+    room `area` (areas are measured, never typed), an unknown fixture name (with
+    the nearest catalogue names), an unknown chain side or schedule kind, and a
+    transaction that cannot be opened. The grid's and the plan symbols' own
+    drawing stay separate tools (`arch_grid`, `arch_symbol`).
     """
     from engineering.arch.spec import draw_plan_from_spec
 
     await ctx.info(
         f"arch_plan_from_spec: {len((spec or {}).get('walls') or [])} wall(s), "
         f"{len((spec or {}).get('openings') or [])} opening(s)"
+        f"{' (dry run)' if dry_run else ''}"
     )
     try:
-        return await draw_plan_from_spec(_backend(ctx), spec)
+        return await draw_plan_from_spec(_backend(ctx), spec, dry_run=dry_run, grid=grid)
     except ValueError as exc:
         raise ToolError(str(exc)) from exc
 

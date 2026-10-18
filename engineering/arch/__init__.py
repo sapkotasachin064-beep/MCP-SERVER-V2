@@ -16,6 +16,9 @@ from .catalogue import (
     catalogue,
     insert_item,
 )
+from .completeness import CHECKS as COMPLETENESS_CHECKS
+from .completeness import check as check_completeness
+from .completeness import grid_misalignment
 from .dimension import (
     FIRST_OFFSET_PAPER_MM,
     ROWS,
@@ -96,6 +99,7 @@ __all__ = [
     "BLONDEL_RANGE",
     "CATALOGUE_NAMES",
     "CatalogueItem",
+    "COMPLETENESS_CHECKS",
     "DEFAULT_TOL",
     "FAMILIES",
     "FIRST_OFFSET_PAPER_MM",
@@ -124,6 +128,7 @@ __all__ = [
     "block_spec",
     "blondel",
     "catalogue",
+    "check_completeness",
     "decode",
     "detect_rooms",
     "draw_grid",
@@ -138,6 +143,7 @@ __all__ = [
     "fmt_number",
     "from_payload",
     "grid_axes",
+    "grid_misalignment",
     "grid_prims",
     "insert_item",
     "label_room",

@@ -31,6 +31,8 @@ import anyio
 from engineering.arch import draw as _draw
 from engineering.arch import rooms as _rooms
 from engineering.arch import schedule as _schedule
+from engineering.arch.catalogue import block_spec as _fixture_block_spec
+from engineering.arch.catalogue import insert_item as _fixture_insert_item
 
 from .lang import LANGS
 from .model import (
@@ -56,10 +58,12 @@ SPEC_KEYS = (
     "rooms",
     "chains",
     "schedules",
+    "fixtures",
 )
 SHEET_KEYS = ("intent", "sheet_size", "scale")
 CHAIN_SIDES = ("bottom", "top", "left", "right")
 SCHEDULE_KINDS = ("doors", "windows", "rooms")
+FIXTURE_KEYS = ("id", "name", "at", "rotation")
 
 #: A two-room plan the tool docstring and the tests use: an entrance door and
 #: an interior door, two windows, a straight stair, both rooms labelled, the
@@ -144,6 +148,18 @@ def _number(value, where: str) -> float:
         raise ValueError(f"{where}: expected a number, got {value!r}") from None
     if not math.isfinite(number) or number <= 0.0:
         raise ValueError(f"{where}: must be a finite number greater than zero, got {value!r}")
+    return number
+
+
+def _angle(value, where: str) -> float:
+    if isinstance(value, bool):
+        raise ValueError(f"{where}: expected a number, got {value!r}")
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{where}: expected a number, got {value!r}") from None
+    if not math.isfinite(number):
+        raise ValueError(f"{where}: must be finite, got {value!r}")
     return number
 
 
@@ -256,6 +272,35 @@ def validate_spec(spec: dict) -> dict:
             )
         schedules.append({"kind": kind, "at": _point(item.get("at"), f"schedules[{i}].at")})
 
+    fixtures = []
+    seen_fixtures: set[str] = set()
+    for i, item in enumerate(_list(spec, "fixtures")):
+        path = f"fixtures[{i}]"
+        if not isinstance(item, dict):
+            raise ValueError(f"{path}: expected a dict, got {type(item).__name__}")
+        unknown = sorted(set(item) - set(FIXTURE_KEYS))
+        if unknown:
+            raise ValueError(
+                f"{path}: unknown key(s) {', '.join(unknown)}; keys are {', '.join(FIXTURE_KEYS)}"
+            )
+        fixture_id = item.get("id")
+        if not isinstance(fixture_id, str) or not fixture_id.strip():
+            raise ValueError(f"{path}.id: required")
+        fixture_id = fixture_id.strip()
+        if fixture_id in seen_fixtures:
+            raise ValueError(f"{path}.id: {fixture_id!r} is used twice")
+        seen_fixtures.add(fixture_id)
+        name = item.get("name")
+        if not isinstance(name, str) or not name.strip():
+            raise ValueError(f"{path}.name: required")
+        try:
+            _fixture_block_spec(name)
+        except ValueError as exc:
+            raise ValueError(f"{path}.name: {exc}") from exc
+        at = _point(item.get("at"), f"{path}.at")
+        rotation = _angle(item.get("rotation", 0.0), f"{path}.rotation")
+        fixtures.append({"id": fixture_id, "name": name.strip(), "at": at, "rotation": rotation})
+
     return {
         "sheet": {
             "intent": str(sheet.get("intent") or "architectural plan"),
@@ -271,24 +316,55 @@ def validate_spec(spec: dict) -> dict:
         "rooms": rooms,
         "chains": sides,
         "schedules": schedules,
+        "fixtures": fixtures,
     }
 
 
-async def draw_plan_from_spec(backend: AutoCADBackend, spec: dict) -> dict:
+async def draw_plan_from_spec(
+    backend: AutoCADBackend, spec: dict, *, dry_run: bool = False, grid: dict | None = None
+) -> dict:
     """Validate, then draw the whole plan inside one transaction.
 
-    Returns ``{"walls", "openings", "stairs", "rooms", "chains", "schedules",
-    "omitted", "drawn", "critique", "backend"}``: the wall and opening ids that
-    were drawn (an opening the wall engine could not cut is in ``omitted``, not
-    in ``openings``), each drawing step's own result (``drawn`` is
-    ``draw_walls``'), and the three ``arch_*`` critique focuses run over the
-    committed drawing.
+    Returns ``{"walls", "openings", "stairs", "rooms", "fixtures", "chains",
+    "schedules", "omitted", "drawn", "critique", "completeness", "backend"}``:
+    the wall and opening ids that were drawn (an opening the wall engine
+    could not cut is in ``omitted``, not in ``openings``), each drawing
+    step's own result (``drawn`` is ``draw_walls``'), the three ``arch_*``
+    critique focuses run over the committed drawing, and ``completeness`` -
+    the rule-based, non-blocking findings of ``engineering.arch.completeness``
+    (a missing door, an unreachable room, an unlabelled face, ...).
+
+    ``dry_run=True`` validates and runs the completeness checks in memory and
+    draws nothing - no backend call is made at all, matching
+    ``pid_from_spec``'s ``dry_run``. Use it to see what the document is
+    missing (``completeness`` entries of ``severity: "error"`` are the ones
+    worth asking the caller about) before spending a transaction on it.
+    ``grid``, when given, is ``{"x_axes", "y_axes", "tolerance"}`` and adds
+    wall-to-grid coordination findings to ``completeness``; it draws nothing
+    (``arch_grid`` draws the axis lines and bubbles) and checks nothing a
+    structural engineer would need to sign off on - only whether this plan's
+    walls land on the grid positions the caller supplies.
     """
+    from engineering.arch.completeness import check as check_completeness
     from engineering.arch.critique import ARCH_FOCUSES, build_index, issues_for
 
     norm = validate_spec(spec)
     scale = norm["scale"]
     lang = norm["lang"]
+    completeness = check_completeness(norm, grid=grid)
+
+    if dry_run:
+        return {
+            "dry_run": True,
+            "walls": [wall.id for wall in norm["walls"]],
+            "openings": [o.id for o in norm["openings"]],
+            "stairs": [s.id for s in norm["stairs"]],
+            "rooms": [r["id"] for r in norm["rooms"]],
+            "fixtures": [f["id"] for f in norm["fixtures"]],
+            "omitted": norm["omitted"],
+            "completeness": completeness,
+        }
+
     if backend.get_plan_spec() is None:
         await backend.drawing_plan(
             norm["sheet"]["intent"], norm["sheet"]["sheet_size"], 1.0 / scale, "arch"
@@ -308,6 +384,7 @@ async def draw_plan_from_spec(backend: AutoCADBackend, spec: dict) -> dict:
         "walls": None,
         "stairs": [],
         "rooms": [],
+        "fixtures": [],
         "chains": None,
         "schedules": [],
     }
@@ -323,6 +400,15 @@ async def draw_plan_from_spec(backend: AutoCADBackend, spec: dict) -> dict:
                 )
             except ValueError as exc:
                 raise ValueError(f"stairs[{i}]: {exc}") from exc
+        for i, fixture in enumerate(norm["fixtures"]):
+            try:
+                result["fixtures"].append(
+                    await _fixture_insert_item(
+                        backend, fixture["name"], at=fixture["at"], rotation=fixture["rotation"]
+                    )
+                )
+            except ValueError as exc:
+                raise ValueError(f"fixtures[{i}]: {exc}") from exc
         for i, room in enumerate(norm["rooms"]):
             try:
                 result["rooms"].append(
@@ -371,10 +457,12 @@ async def draw_plan_from_spec(backend: AutoCADBackend, spec: dict) -> dict:
         "openings": [o.id for o in norm["openings"] if o.id not in skipped],
         "stairs": result["stairs"],
         "rooms": result["rooms"],
+        "fixtures": result["fixtures"],
         "chains": result["chains"],
         "schedules": result["schedules"],
         "omitted": omitted,
         "drawn": drawn,
         "critique": critique,
+        "completeness": completeness,
         "backend": backend.name,
     }

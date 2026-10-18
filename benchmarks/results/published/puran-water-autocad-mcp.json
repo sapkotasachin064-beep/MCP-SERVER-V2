@@ -1,0 +1,187 @@
+{
+  "adapter": "puran-water-autocad-mcp",
+  "adapter_metadata": {
+    "backend": "ezdxf",
+    "kind": "mcp-stdio-blackbox",
+    "pinned_sha": "95476a33a1c246308326eb4709d6379ef2efdbc1",
+    "repo": "https://github.com/puran-water/autocad-mcp.git",
+    "tools_discovered": [
+      "annotation",
+      "block",
+      "drawing",
+      "entity",
+      "layer",
+      "pid",
+      "system",
+      "view"
+    ]
+  },
+  "environment": {
+    "implementation": "CPython",
+    "machine": "AMD64",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.0"
+  },
+  "generated_at": "2026-07-23T11:32:07.977232+00:00",
+  "git_sha": "4a2e9d658f051cb756f92cb8fae945c64b8cc7d4",
+  "results": [
+    {
+      "artifacts": [
+        {
+          "filename": "puran_core_geometry.dxf",
+          "sha256": "bc8185404c8344134859293a0e28ebf821cd5968553cdd96b7029e46e1ca0c99",
+          "size_bytes": 18587
+        }
+      ],
+      "duration_ms": 205.92,
+      "message": "",
+      "metrics": {
+        "circles": 1,
+        "line_length": 5.0,
+        "lines": 1
+      },
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "core_geometry"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "puran_modify_query.dxf",
+          "sha256": "2113a59d0a9f624b6134e89f992d153bc8e085495e956f4887b8ba7b54f3c005",
+          "size_bytes": 18473
+        }
+      ],
+      "duration_ms": 156.79,
+      "message": "",
+      "metrics": {},
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "modify_query"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "puran_layers.dxf",
+          "sha256": "7144467e22e2e8c8d18f1fc4f177f078f9ce450bb73f4e9ca8f74c16d67e1b53",
+          "size_bytes": 18498
+        }
+      ],
+      "duration_ms": 189.98,
+      "message": "layer created; no linetype-loading operation is exposed",
+      "metrics": {},
+      "score": 50.0,
+      "status": "partial",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "layers_linetypes"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "puran_dimensions.dxf",
+          "sha256": "dde808c5e504c5e6b7837f5f5c14ef096711812a6239dd284906efed5c9e3614",
+          "size_bytes": 20972
+        }
+      ],
+      "duration_ms": 215.28,
+      "message": "",
+      "metrics": {
+        "dimension_count": 1
+      },
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "dimensions"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.12,
+      "message": "no TABLE or MLEADER operation in the 8-tool surface (v3.1)",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "table_mleader"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.02,
+      "message": "no transaction begin/commit/rollback tool (undo/redo are File-IPC only)",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "transactions"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.01,
+      "message": "no requirements-preflight equivalent",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "preflight"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.03,
+      "message": "no critique/repair loop equivalent",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "quality_refiner"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "puran_roundtrip.dxf",
+          "sha256": "11335953641be32f3f47c23fbc13f79876111c6f84f8874af8f5e04d5e398cf6",
+          "size_bytes": 18474
+        }
+      ],
+      "duration_ms": 143.4,
+      "message": "",
+      "metrics": {
+        "entity_count": 1
+      },
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "dxf_roundtrip"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.06,
+      "message": "no hashed delivery-manifest equivalent (plot_pdf is File-IPC only)",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "auditable_delivery"
+    }
+  ],
+  "schema_version": "2.0",
+  "summary": {
+    "attempted": 10,
+    "coverage_percent": 50.0,
+    "passed": 4,
+    "score": 45.0,
+    "supported": 5,
+    "unsupported": 5
+  },
+  "timeout_seconds": 30.0
+}

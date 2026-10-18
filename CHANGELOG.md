@@ -1,0 +1,2296 @@
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+
+## [1.6.0] — 2026-09-25
+
+The v1.6 roadmap, shipped as five tracks: 154 → 247 registered tools in 28
+groups, the correctness suite at 48 / 48 against v1.5.1's 26 / 48 with zero
+regressions, the 21-task benchmark matrix at 21 / 21, and a live AutoCAD 2026
+run of every track's COM paths. Two roadmap criteria are not green, and
+**Not in 1.6** below says which and why: track D (Plant 3D) was dropped, and
+headless creation throughput is still below v1.4.0's. Roadmap:
+`docs/superpowers/specs/2026-09-15-v1.6-roadmap-design.md`.
+
+Track A of 1.6: the server becomes a P&ID expert and a P&ID reader. Nine
+`pid_*` tools in a new SECTION 17, two generic contracts every engine
+implements, six critique focuses that join `drawing_finalize`, and a
+`TOOL_PACKS` gate so a mechanical-only client never pays for the P&ID
+surface. Spec: `docs/superpowers/specs/2026-09-15-v1.6-pid-design.md`.
+
+Track E of 1.6: the environment a drawing lives in. 38 tools in three new
+sections — styles (18), page setup and templates (19), environment (20) —
+the `drawing_settings` facade grown, a system-variable catalog, five bundled
+templates, several open documents headlessly, portable layer states, named
+views and UCS, and the live-only group (launch, preferences, document
+properties, operator prompts) refused honestly headlessly. Spec:
+`docs/superpowers/specs/2026-09-16-v1.6-settings-design.md`.
+
+Tracks B and G of 1.6: the complete mechanical 2D part drawer and the sheet
+standard. 25 tools in four new sections — mechanical parts (21), standard
+parts (22), mechanical annotation (23) and sheet and delivery (24) — one part
+model and one view engine instead of a zoo of per-part generators, a new
+`mech` pack, six `mech_*` critique focuses and four new contract members
+(`xref_attach`, `xref_manage`, `image_attach`, `drawing_export_dwg`). Spec:
+`docs/superpowers/specs/2026-09-22-v1.6-mech-design.md`.
+
+Track F of 1.6: architectural 2D, the plan model. 12 tools in a new SECTION
+25 — a wall network with hosted doors and windows drawn by one engine (L / T /
+X junctions resolved, openings cut, poché by material), rooms computed as the
+faces the walls enclose and read back from any plan, schedules read off the
+drawing, a furniture and sanitary catalogue, the structural grid and plan
+symbols, exterior dimension chains and the whole plan in one transaction — a
+new `arch` pack, three `arch_*` critique focuses, and English or Turkish
+labels. No new contract member. Spec:
+`docs/superpowers/specs/2026-09-23-v1.6-arch-design.md`.
+
+Track H of 1.6: understanding drawings somebody else made. Six tools in two
+new sections — understanding and QA (26: a one-call report, a scale check
+between a P&ID and its layout, a revision diff, topology checks) and plant
+takeoffs (27: pipe and cable quantities whose topology comes from the P&ID
+and whose lengths come from the layout) — one DXF snapshot per drawing (a
+live document through `Document.Export`, never renamed), a vocabulary in five
+languages, three `topo_*` critique focuses, a new `plant` pack and the
+`office` extra. Read-only by default; nothing invented. No new contract
+member. Spec: `docs/superpowers/specs/2026-09-24-v1.6-understand-design.md`.
+
+### Added
+
+- **Styles — 10 tools, pack `core`.** `dimstyle_list/create/modify/set_current`,
+  `textstyle_list/create/set_current`, `mleaderstyle_list/create`,
+  `drawing_apply_standard`. ISO-25 and ANSI (metric) presets are authored data
+  pinned by `tests/test_standards_presets.py` against ISO 129-1 / ASME Y14.2
+  (DIMTXT 2.5 / 3.0, DIMASZ 2.5 / 3.0, DIMEXO 0.625 / 1.5, DIMDSEP `,` / `.`,
+  DIMTAD 1 / 0 …). `dimstyle_modify` accepts the 33-name whitelist only (the
+  17 preset variables plus 16 more — `DIM_VARIABLE_WHITELIST`) and
+  refuses an out-of-range value by name before writing; `changed` lists what
+  moved. A font neither bundled nor on the engine's font path is written and
+  reported `font_resolved: false`, never refused. `mleaderstyle_create` works
+  on both engines: ActiveX exposes no MLeaderStyle *collection*, but the
+  `ACAD_MLEADERSTYLE` dictionary holds full `IAcadMLeaderStyle` objects, so
+  the live engine creates the style through `AddObject` and the property
+  writes — no `mleaderstyle` capability key exists.
+- **Page setup & templates — 6 tools, pack `core`.** `page_setup_list/apply`
+  (`PAPER_SIZES` ISO A0–A4 / ANSI A–E, `CTB_CATALOG`, `SCALES`), `plot_style_list`
+  (catalog + installed), `batch_plot` — `mediabox_mm` parsed from each PDF's
+  `/MediaBox`, so `ISO_A3` landscape is 420 × 297 because the file says so —
+  `drawing_template_list`, `drawing_template_save` (`.dwt` refused headlessly,
+  capability `dwt_write`). Five bundled templates built by
+  `scripts/build_templates.py` through the server's own methods (`--check`
+  proves the DXFs byte-reproducible); their `.dwt` twins were built once on
+  AutoCAD 2026 by the smoke. `drawing_new(template="iso_a3_mech")` resolves the
+  bundled file and reports `{name, source}`.
+- **Environment — 22 tools, pack `settings`.** `document_list/activate/close`
+  on both engines (the headless backend keeps a document registry;
+  `drawing_close` is the active-document case); `layer_state_save/restore/
+  list/delete` as portable XRECORD snapshots — restore applies only the
+  requested `properties`, reports `missing_layers` (skipped, never created)
+  and `new_layers` (untouched), and the state survives save/reopen;
+  `view_named_save/restore/list`; `ucs_list/set/restore` (non-orthogonal axes
+  refused with the measured angle; tool coordinates stay WCS);
+  `system_variable_describe` over a 90-entry catalog (`known: false` + nearest
+  names on a miss); `drawing_properties_get/set` (custom properties on both
+  engines, summary fields COM-only: `dwgprops`); `system_launch`
+  (`live_application`), `system_preferences_get/set` (whitelisted keys with
+  ranges, read-only keys refused by name, `old`/`new` reported:
+  `preferences`), `user_pick_point/select` and `system_prompt_message`
+  (`interactive_prompt`; a cancelled pick is `{cancelled: true}`, a
+  `COM_CALL_TIMEOUT` overrun is `timed_out`).
+- **`drawing_settings` grows** by `limits`, `grid`/`grid_spacing`,
+  `snap`/`snap_spacing`, `ortho`, `polar`/`polar_angle`, `psltscale`,
+  `annotation_scale`, `linear_units`, `angular_units`, `dimstyle`,
+  `textstyle`; `system_set_variable` refuses an out-of-range value for a
+  catalogued name before writing.
+- **Benchmark evidence.** `benchmarks/tasks_v4.py` adds `page_setup_truth`;
+  the correctness suite grows to 32 with `settings_dimstyle_iso25_values`,
+  `settings_layer_state_roundtrip`, `settings_pdf_mediabox_a3`. A/B against
+  `v1.5.1`: **26 / 32 → 32 / 32, six `miss → pass`, zero regressed**.
+  `scripts/smoke_settings_com.py` runs the track once against the live seat
+  (record below).
+- **Benchmark evidence for tracks B and G.** `benchmarks/tasks_v5.py` (18
+  tasks, the default matrix; v4 / v3 / v2 stay addressable) adds
+  `mech_assembly`: a flange-coupling A3 sheet built through the code the tools
+  call — frame and title block, a hub with a full section and chain
+  dimensions, a flange with its bolt-circle end view, ISO 4014 bolts and ISO
+  4032 nuts, the parts list read off the drawing and linked balloons — gated on
+  `drawing_critique(focus=None)` returning zero issues and a finalize score of
+  at least 90 (it scores 100); a test drops one balloon and watches the gate
+  fail by name. The correctness suite grows to 39 with `mech_part_roundtrip`,
+  `mech_section_hatch_area` (1200 mm² read back out of the drawing),
+  `mech_iso286_on_dimension`, `mech_thread_unrepresented_is_caught`,
+  `std_part_iso4014_m12`, `sheet_frame_iso5457_a3` and `bom_balloon_link`.
+  A/B against `v1.5.1`: **26 / 39 → 39 / 39, thirteen `miss → pass`, zero
+  regressed**. The token suite measures a `TOOL_PACKS=core,mech` row: 193
+  tools / 61,673 tokens against 224 / 72,163 by default.
+- **Live COM smoke.** `scripts/smoke_mech_com.py` executed once on AutoCAD
+  2026 (`25.1s (LMS Tech)`): the A3 frame and ISO 7200 title block, a two-step
+  shaft with a full section and 12 chain dimensions, an ISO 4014 M12x60 block
+  carrying 1 ACADMCP_MECH chunk, an ISO 7573 parts list read off the drawing
+  with its linked balloon, an xref attached and detached, and a real
+  31687-byte `.dwg` written by ActiveX `SaveAs` — `drawing_critique(focus=None)`
+  returned 0 issues (record below).
+- **Architecture — 12 tools, pack `arch`.** `arch_wall`, `arch_opening`,
+  `arch_stair`, `arch_room`, `arch_rooms_detect`, `arch_schedule`,
+  `arch_grid`, `arch_symbol`, `arch_catalogue_list`, `arch_catalogue_insert`,
+  `arch_dimension_chains`, `arch_plan_from_spec`. The plan travels as
+  `ACADMCP_ARCH` XDATA through the mechanical codec, generalised to take an
+  application id; `draw_prims` takes a role map. The `arch` layer set is
+  ISO 13567-style with ISO 128 lineweights; wall poché follows
+  `engineering/arch/materials.py`, whose rows each name their source. Areas
+  are measured, never typed. Lean gains four and reaches 64.
+- **Benchmark evidence for track F.** `benchmarks/tasks_v6.py` (19 tasks, the
+  default matrix; v5 to v2 stay addressable) adds `arch_roundtrip`: the example
+  plan drawn by `arch_plan_from_spec` and read back by `arch_rooms_detect`
+  within 0.1 % of each label and of the hand-computed net floor, the schedules
+  listing the drawn tags, gated on a zero-issue `drawing_critique(focus=None)`
+  and a finalize score of at least 90; a test removes one room label and
+  watches the gate fail by name. The correctness suite grows to 43 with
+  `arch_junction_l_t_x`, `arch_room_area_net`, `arch_opening_cuts_wall` and
+  `arch_rooms_detect_foreign`. A/B against `v1.5.1`: **26 / 43 → 43 / 43,
+  seventeen `miss → pass`, zero regressed**. The token suite measures a
+  `TOOL_PACKS=core,arch` row: 191 tools / 60,568 tokens against 236 / 78,772
+  by default.
+- **Live COM smoke.** `scripts/smoke_arch_com.py` executed once on AutoCAD
+  2026 (`25.1s (LMS Tech)`): the example plan drawn in one transaction, both
+  rooms read back within 0.1 % of their labels and of the hand-computed net
+  floor, and `drawing_critique(focus=None)` returned 0 issues (record below).
+- **Understanding foreign drawings — 4 tools, pack `core`; plant takeoffs — 2
+  tools, pack `plant`.** `drawing_understand`, `drawing_scale_check`,
+  `drawing_diff`, `drawing_topology_check`, `pipe_takeoff`, `cable_takeoff`.
+  Every one reads a snapshot of frozen WCS records
+  (`engineering/understand/snapshot.py`); labels are read by one parser
+  (`%%c`, `\U+2205`, the U+2300 sign, `ø` and MTEXT format runs decoded,
+  Cyrillic look-alike tags folded to Latin) and layer names and texts by one
+  EN / TR / RU / NL / DE vocabulary. The takeoff workbook is written as CSV
+  always and as XLSX with the new `office` extra (`openpyxl`, also in `full`).
+  Lean gains `drawing_understand` and reaches 65.
+- **Benchmark evidence for track H.** `benchmarks/tasks_v7.py` (21 tasks, the
+  default matrix; v6 to v2 stay addressable) adds `takeoff_roundtrip` and
+  `understand_foreign`, both on the synthetic plant pair of
+  `tests/fixtures/plant_pair.py`, whose truth is computed from the positions
+  it placed; each gate is shown to fail on a broken input. The correctness
+  suite grows to 48 with `scale_check_detects_schematic`,
+  `pipe_takeoff_rmst_exact`, `cable_takeoff_roundup`,
+  `diff_detects_known_edits` and `topology_known_defects`. A/B against
+  `v1.5.1`: **26 / 48 → 48 / 48, twenty-two `miss → pass`, zero regressed**.
+- **`scripts/field_test_takeoff.py`** runs both takeoffs on a user's own P&ID
+  and layout and writes the report next to them; it refuses an output folder
+  inside the repository and prints no quantity unless `--show` is given.
+- **Live COM smoke.** `scripts/smoke_understand_com.py` executed once on
+  AutoCAD 2026 (`25.1s (LMS Tech)`): the live snapshots matched
+  their files type for type in model space, the DWG route read the same
+  P&ID, both takeoffs matched the truth and the diff reported exactly the
+  one entity moved (record below).
+
+- **P&ID — 9 tools, pack `pid`.**
+  - `pid_symbol_list` / `pid_symbol_insert`: a 43-symbol ISO 10628-2 /
+    ISA-5.1 catalogue authored in code (11 valve bodies × 6 actuators, 6
+    rotating machines, 4 heat exchangers, 6 parametric vessels with nozzle
+    ports, 7 inline items, the instrument bubble in 4 types × 5 locations,
+    5 line markers, 3 connectors), placed as real blocks with a `TAG`
+    ATTRIB, named ports, and an `ACADMCP_PID` XDATA payload. Ports are
+    transformed through the INSERT's real rotation, scale and mirror; a
+    stretched symbol (`|x_scale| ≠ |y_scale|`) has no circle for a radial
+    port and is refused rather than answered with a wrong point.
+  - `pid_line_draw`: port-to-port orthogonal routing (`auto` picks from seven
+    candidates by fewest bends, then length; `direct`; or waypoints), eight
+    ISA-5.1 line classes mapped to layer / linetype / marker blocks, and line
+    numbers filled from a format (default
+    `{size}-{service}-{seq}-{spec}-{insulation}`; an empty field drops out
+    with its separator). A route that cannot honour the `stub` on both
+    ports is refused by name (`route((0,0), 0°, (3,8), 180°, stub=5)`
+    raises) rather than drawn short; a non-axis port direction, a NaN
+    coordinate and an unfillable format token are refused before anything
+    is written. Lines it crosses are **counted and
+    reported** (`crossings`), never silently drawn over — and never refused.
+  - `pid_tag_parse`: the ISA-5.1 identification-letter grammar (Table 4.1,
+    pinned by `tests/data/isa51_tags.json`), with the equipment-prefix map.
+  - `pid_graph`: the reader. Every symbol INSERT becomes a node with a
+    `source` and a `confidence` — catalogue name 1.0, `ACADMCP_PID` payload
+    0.95, `TAG`-style attribute or keyword block name 0.6 with inferred
+    ports, an INSERT a plain line merely touches 0.3. Confidence is the
+    minimum of its inputs, never raised by agreement between heuristics.
+    Each line end resolves to a port, a junction on another line, or
+    `dangling` with the nearest connectable port as a hint, always within
+    its own space (`scope="all"` never joins two layouts). Edge `length` is
+    the bulge-aware length the engine reports, not a chord walk (12.5 %
+    short on a semicircular jump).
+  - `pid_instrument_index` / `pid_line_list` / `pid_equipment_list`: derived
+    from the graph only, optionally written as CSV. An instrument tapping a
+    pipe reports the pipe's line number, never its own signal wire.
+  - `pid_from_spec`: a whole sheet from one JSON spec in one transaction —
+    rolled back entirely on the first refusal — returning the handles, the
+    graph and the critique; `dry_run=True` routes in memory and touches
+    nothing.
+- **`block_define(name, entities, attdefs)`** on both engines: a block from
+  typed primitive specs (line, circle, arc, polyline, text, solid) and
+  ATTDEFs, no source entities needed; `overwrite=True` replaces the contents
+  so existing INSERTs keep the name. Validation runs before any write: a
+  DXF-illegal layer name, a duplicate or trailing-newline ATTDEF tag, a
+  multi-line or trailing-caret string are `TypeError`/`ValueError` naming
+  `entities[i]` / `attdefs[i]`, and nothing is created.
+- **`entity_get_xdata` / `entity_set_xdata`** on both engines, typed by DXF
+  group code. The two limits AutoCAD enforces silently are enforced loudly
+  and before the write: a string over **255 characters** and an entity
+  budget of **16 KB across every application** (three 15 KB apps on one
+  entity used to pass headlessly and would have failed `SetXData` live).
+  LF/CR in a string is refused — it split a DXF tag, the saved file failed
+  to reopen and, because every undo snapshot is a DXF save,
+  `transaction_rollback` broke after one such write. `nan`/`inf` are refused
+  rather than written as literal text that reads back as `null`.
+- **Six critique focuses** — `pid_dangling_line`, `pid_duplicate_tag`,
+  `pid_incompatible_connection`, `pid_untagged_instrument`,
+  `pid_illegal_tag`, `pid_unconnected_equipment` — run under `focus=None`
+  and inside `drawing_finalize`, over one cached graph. They score
+  evidence only: a drawing without a recognised P&ID node returns `[]`, a
+  0.3 touch guess can neither create nor suppress a finding, and a line
+  ending on a sheet frame (an INSERT the drawing does not vouch for) is
+  dangling. `drawing_refine` hints name only ports `pid_line_draw` accepts.
+- **Two resources:** `autocad://pid/symbols` (the catalogue with ports and
+  parameter schemas) and `autocad://standards/isa51` (the letter tables and
+  the grammar's disambiguation rules).
+- **Benchmark evidence.** `benchmarks/tasks_v4.py` adds `pid_roundtrip`
+  (the example sheet drawn through `pid_from_spec`, read back by a graph
+  builder that never sees the spec); the correctness suite grows to 29 with
+  three P&ID checks. A/B against `v1.5.1`: **26 / 29 → 29 / 29, three
+  `miss → pass`, zero regressed** (`ab-v1.5.1-vs-v1.6.0-dev.json`).
+- `scripts/smoke_pid_com.py` runs the track once against the live AutoCAD
+  on the machine, in a new document; `scripts/render_pid_catalog.py` and
+  `scripts/render_readme_pid.py` rebuild the two README images.
+
+### Fixed
+
+- **Every tool call raised `RecursionError` after a few hundred in-process
+  sessions.** fastmcp 3's `enable()` / `disable()` append a Visibility
+  transform per call, and a tool lookup walks the whole transform stack as
+  nested calls. `_apply_tool_profile` runs in the lifespan, once per client
+  connection, so each session stacked two more layers. The first Linux CI run
+  of the 1.6 tree found it: on CPython 3.11, which counts C frames against the
+  recursion limit, `system_status` itself failed from about 90 % of the suite
+  on. The profile's transforms now replace the previous ones instead of
+  stacking on them, the idiom `_apply_discovery_mode` already used, and a test
+  switches the profile 600 times and then calls a tool.
+- The same CI run failed 21 fake-ActiveX tests off Windows (they build a real
+  pywin32 VARIANT and now skip without pywin32, like the suite's other
+  VARIANT-dependent COM tests; the Windows lane runs them), and a test that
+  spelled a path through a directory it never created, which only Windows
+  normalises away.
+- **Found by the 1.6.0 README renders** (each with a test that fails on the
+  old code):
+  - The exterior dimension chains of `arch_dimension_chains` and
+    `arch_plan_from_spec` were drawn at the dimension style's DIMSCALE 1, so a
+    1:50 chain's 2.5 text was 2.5 drawing units high — 0.05 mm on the sheet —
+    and the plan render showed empty boxes where the numbers belong. Every
+    other plan annotation already followed the plot scale, and now the chains
+    do too: DIMSCALE is the plan's scale while they are drawn (reported as
+    `dimscale`, replacing the old advice to set it by hand), and the drawing's
+    own DIMSCALE is put back afterwards. Headlessly each chain dimension
+    carries the scale as its override. The live engine reaches the same
+    DIMSCALE through `SetVariable`; that combination has not been re-run on a
+    live seat since this change.
+  - A headless TABLE drew its title as the first column's cell, so a title
+    such as `DOOR SCHEDULE` wrapped inside that column and ran over the header
+    row. The title row is now merged across the table, as AutoCAD's TABLE
+    draws it.
+  - A headless TABLE's cell margin was a flat 1.0 drawing unit — 0.02 mm on a
+    1:50 schedule, where the text sat on the cell line and `LEFT` read as
+    `FT`. The margin now scales with the lettering (0.4 × text height, at most
+    0.15 × row height), which leaves every table at the default 2.5 text as
+    it was.
+  - `drawing_new` left the Standard text style on ezdxf's default `txt`,
+    which has no superscript two: a room label's `m²` read `m?` when AutoCAD
+    opened the DXF and rendered as a box headlessly. Standard is now
+    `arial.ttf`, as AutoCAD 2026's `acadiso.dwt` ships it, so both engines
+    begin from the same Standard; the five bundled templates are rebuilt on it
+    and `scripts/build_templates.py --check` reproduces them.
+- **Hatch islands on a live seat.** `hatch_add_boundary` was refused on COM
+  (`hatch_edge_paths`), so a transverse section of any hollow part - a
+  bushing, a flange bore - could not be drawn in AutoCAD. Each typed edge now
+  becomes a temporary LINE, true ARC or ELLIPSE appended with
+  `AppendInnerLoop` and deleted after `Evaluate`; a chain of lines is one
+  polyline. Measured on AutoCAD 2026: a two-arc island leaves exactly
+  10000 - 100*pi of a 100 x 100 hatch, the OD40/ID20 sleeve's section B-B hatches
+  942.2864 mm2 (the view engine's declared 180-gon), and an open loop is
+  refused with nothing left behind.
+- **`block_find_references` found nothing on a live seat.** ActiveX names a
+  block reference `AcDbBlockReference`, so `entity_list(type_filter="INSERT")`
+  matched nothing. The COM type filter now lets the DXF name find it (`INSERT`,
+  `LWPOLYLINE`, and every `*DIMENSION` class for `DIMENSION`); the reported type
+  is unchanged.
+
+- **Found by the tracks B + G evidence** (each with a test that fails on the
+  old code):
+  - `dimension_diameter` put its text beyond the *second* chord point
+    headlessly and beyond the *first* on AutoCAD (`AddDimDiametric`'s
+    ChordPoint, measured: a ⌀50 from (x, 170) to (x, 220) annotated at
+    (x, 160)). The two engines annotated opposite sides of the same part, and
+    headlessly every front-view diameter of `mech_part_draw` stood on its own
+    chain dimension — `dim_overlap` fired on any single-step disk. The
+    headless engine now follows ActiveX.
+  - On a live seat `mech_part_draw` died after drawing every view: its anchor
+    POINT goes on `MECH`, and ActiveX refuses `entity.Layer` on a missing
+    layer (`Key not found`) where ezdxf creates it. Every mechanical draw
+    path now ensures its target layers before the first entity.
+  - `bom_extract` returned nothing live: ActiveX names a block reference
+    `BLOCKREFERENCE`, and the parts list filtered on `INSERT` only. Both
+    names are read.
+  - The live `_entity_info` reported no `text_position` for a dimension (the
+    entity arrives narrowed to `IAcadEntity`, which has no `TextPosition`),
+    so `dim_overlap` compared bounding-box centres — a diameter and its bore
+    read "0.00 mm apart". It is read through the concrete class now.
+  - `pid_graph` raised `KeyError: 'start'` inside `drawing_critique(focus=None)`
+    on a LINE whose point read AutoCAD had refused while busy; such a line is
+    left out instead.
+  - The validator's `fake_dimension_text` read a standard-part designation
+    (`ISO 4014 - M12x60`) as a hand-typed dimension, so every parts list
+    drawn as text cost its sheet a warning. The designation is exempt; a
+    measurement beside it still flags.
+- **Track A hardening** (`tests/test_track_a_hardening.py`; the remaining
+  review findings are filed with a disposition each in
+  `docs/analysis/track-a-review-backlog.md`):
+  - `entity_create_block_ref` of an undefined block name is refused before
+    writing (it returned a handle to a dangling INSERT).
+  - `block_explode` keeps ATTRIB text: each ATTRIB becomes a TEXT entity on
+    both engines instead of being dropped.
+  - `pid_from_spec` refuses a NaN coordinate before the transaction opens and
+    rolls back on `BaseException`, not only `Exception`.
+  - A signal line no longer receives a fabricated line number and label; the
+    reader reports `line_number: null` for it.
+  - A bubble's exit point honours the first waypoint instead of the port
+    direction.
+  - A foreign or hand-edited `ACADMCP_PID` payload is read tolerantly, and an
+    existing polyline with a bulge is tested as its arc, not its chord, so a
+    line through a crossing jump counts as a crossing.
+  - `block_insert` attribute values are validated as strings; an int or None
+    is a `TypeError` naming the tag, not `str()`-coerced.
+  - `block_define` refuses a NaN base point and a layer that does not exist
+    in the drawing (it wrote both and `drawing_audit` repaired them later).
+- **Headless `block_insert(attributes=…)` lost its ATTRIBs.** The ezdxf path
+  used `add_auto_blockref`, which wraps the INSERT in an anonymous `*U`
+  block: the handle it returned reported `block_name` `*U1`, and
+  `block_get_attributes` on it returned `{}`. Reproduce on v1.5.1 with
+  `block_create_from_entities` of a block with one ATTDEF, then
+  `block_insert(name, attributes={"TAG": "P-101"})` and
+  `block_get_attributes(handle)`. It now inserts the named block with
+  `add_auto_attribs`, so the INSERT carries the name and the ATTRIBs, on
+  both engines alike. `block_insert` of an undefined name is refused before
+  writing (it used to return a handle whose dangling INSERT `drawing_audit`
+  later deleted).
+- Live LWPOLYLINEs report as `POLYLINE` through ActiveX (`AcDbPolyline`),
+  which the P&ID line reader's type filter excluded: on AutoCAD every
+  auto-built line number restarted at seq 1 and `crossings` was always 0.
+  Both spellings are accepted; the COM `_entity_info` polyline branch now
+  returns `points` (and per-vertex `bulges`) for a live LWPOLYLINE.
+- Polyline `bulges` now leave both engines in WCS: a mirrored polyline's
+  arcs were handed out in the entity frame next to WCS points, so a reader
+  tested them on the wrong side of the chord.
+- INSERT properties gain `geometry_bbox` (drawn geometry only, ATTRIBs
+  excluded) and `mirrored` on both engines. The COM box is exact at right
+  angles and measured off them; a member ActiveX cannot measure is carried
+  by its corners and the box says `approximate: true`.
+- **`entity_list` lost every type-specific property on a live seat with a
+  makepy cache.** `ModelSpace.Item` (and `SelectionSet.Item`) is declared
+  `IAcadEntity*`, so once `win32com.client.gencache` had run against AutoCAD
+  every listed entity arrived as the gen_py `IAcadEntity` wrapper: measured on
+  AutoCAD 2026, `item.StartPoint` on an AcDbLine raised `AttributeError`, and a
+  LINE row kept only its bounding box (no `start` / `end`, no polyline
+  `points`, no text). The room reader therefore saw 0 wall segments and
+  `arch_plan_from_spec` refused its first room label live, while every
+  headless test passed. `_entity_info` now re-dispatches exactly that wrapper
+  through its runtime class (`_com_concrete_entity`); a concrete wrapper from
+  `HandleToObject` is left alone. The same narrowing strips `start` from
+  every listed LINE, so it would equally explain the `pid_graph`
+  `KeyError: 'start'` recorded above as a busy-refused point read (not
+  re-measured).
+
+- **Track H, found after the groups landed.** Six defects in the readers,
+  each with a test that failed before its fix:
+  - A truncated DXF (an interrupted save, a partial copy) made ezdxf raise
+    `StopIteration`, which `asyncio.to_thread` cannot hand back to an
+    awaiting caller, so every track H tool reading one would have hung. The
+    snapshot now refuses it as "not a readable DXF file".
+  - `take_snapshot` of a DWG the operator already had open opened it again
+    read-only and closed "it" unsaved - possibly their copy, with their
+    unsaved work. An open document is now looked up first, exported as it
+    stands and left open; only a document the snapshot opened is closed.
+  - `drawing_diff`: a LINE drawn back to front and moved was reported as
+    reshaped; an INSERT carrying one attribute tag twice could lose an edit
+    of the first value (a repeated tag is now compared as the list of its
+    values); the cluster list is capped like the other lists
+    (`truncated["clusters"]`, the markup still clouds every cluster); and a
+    whole-drawing move keeps only the 32 nearest candidates per entity.
+  - A line number was read as an equipment tag: `100-P-001` yielded the pump
+    `P-001`. A token that is the tail of a word beginning with a digit is no
+    longer a tag.
+  - The pipe network merged ends and dropped stubs within `tol = 1.0`
+    drawing units - a metre on a metre P&ID. The tolerance now defaults to
+    1 mm in the P&ID's inferred unit, and a dropped stub is counted and said.
+  - A wiring callout was counted as a place its panel is written:
+    `Wiring to CP-2` made `CP-2` ambiguous in `drawing_scale_check` and
+    `drawing_understand`, and `Wiring to CP1` a phantom tag `CP1`. On the
+    synthetic pair the check matched 10 tags and 45 pairs (13.3 % within
+    ±10 %) where the generator placed 11 and 55 (21.8 %). A callout is no
+    longer a tag occurrence - the rule the line-network reader already kept.
+- **Track H, found by the field test** (the takeoffs run on a real P&ID pair
+  that stays outside the repository). Each fix has a test that failed first:
+  - The pipe network took every piping or electrical layer, so valve, pump
+    and annotation layers (sizes, materials, numbers) became pipe runs.
+    `vocab.is_network_layer` is now the one rule for the network, the
+    topology check and the `topo_*` focuses: piping or electrical at 0.9, and
+    naming neither equipment nor annotation.
+  - Measured on the P&ID, a run still needed equipment tags at both ends, so
+    a field P&ID whose pipes rarely end on a tagged outline gave an empty
+    table. On the P&ID each piece now goes to the room it lies in, with its
+    diameter kept piece by piece. A layout takeoff that cannot route every run
+    now says how many, why, and what the P&ID alternative is.
+  - TEXT caret notation (`^J`, a line break) was left in place, so a room
+    label's number read as `6^J...`. `plain()` now decodes it.
+  - A label that only mentions a room was read as a room: a control cabinet
+    naming the room it serves, or a note pointing into a room. An unnumbered
+    label naming equipment is no room. Without room faces, when the drawing
+    numbers its rooms, only numbered labels take pieces.
+  - The bare Russian "to" before a panel (`к CP1`, `к щиту CP-2`) is a
+    wiring callout.
+- **Track H, what the field test asked for** (each with a synthetic test):
+  - **Rooms drawn as frames.** A room label no wall face holds takes the
+    smallest closed, straight-sided polyline around it that holds no other
+    room number and is at least ten label heights a side (`label+frame`,
+    confidence 0.8). This is how a P&ID draws its rooms, so P&ID lengths are
+    cut at the room frames.
+  - **The nearest panel, flagged.** `cable_takeoff(panel_rule="nearest")`,
+    the default: a load that no callout places, whose tag is on the layout,
+    takes the nearest panel there. Only names with a panel prefix
+    (`is_panel_name`: CP, JB, DB, MCC ...) or names a callout gives are
+    candidates. The row is flagged `panel_inferred`, and an inferred panel
+    never makes a package. `panel_rule="stated"` leaves such a load open. The
+    benchmark and the correctness check read stated panels only.
+  - **Possible packages and detail copies.** `pipe_takeoff` reports
+    `detail_copies`: compact groups of tags drawn twice (`repeated`), and
+    compact groups of one equipment's own parts, such as M150B, M150C and
+    M150D of M150 (`family`). A pasteurizer drawn in detail, whose internal
+    pipes its vendor supplies, shows up this way. Nothing is removed until
+    `exclude_regions=["D2"]` names it. The excluded runs go to the control
+    rows as `excluded_region` and are totalled in `excluded_m`.
+
+### Changed
+
+- **Release evidence re-measured for 1.6.0.** The A/B gate against v1.5.1
+  (`ab-v1.5.1-vs-v1.6.0.json`: 26 / 48 → 48 / 48, 22 fixed, 0 regressed); the
+  reference adapter on matrix v7 (`autocad-mcp-pro.json`: 21 / 21, replacing
+  the v3 run of 1.5); the 100-point rubric re-scored per category with the
+  evidence for every point withheld (93; the competitor rows are their July
+  snapshots, not re-reviewed); the perf lane as medians of five alternating
+  runs, with the v1.4.0 comparison published beside it
+  (`perf-v1.4.0-vs-v1.6.0.json`). The four charts are regenerated from those
+  files, and the README is rewritten around them, with the mechanical and
+  architectural sheets rendered by `scripts/render_readme_mech.py` and
+  `scripts/render_readme_arch.py`.
+- `ruff` skips `docs/superpowers`: ruff 0.16 formats Markdown code blocks,
+  and reflowing a plan's quoted code would change what the document says was
+  written.
+- **`MAX_DXF_BYTES` defaults to 512 MB** (was 50 MB): a real plant layout read
+  for track H was a 188 MB DXF. The snapshot's refusal names the file's size,
+  the limit and the variable; `0` still disables the check.
+- Three tool groups appear in `system_about` and `docs/tool-inventory.json`:
+  `styles` (10), `page_setup` (6), `environment` (22) — 204 tools in 23 groups;
+  `LEAN_TOOL_NAMES` 55; capability keys `dwgprops`, `dwt_write`,
+  `live_application`, `preferences`, `interactive_prompt`, `registry_sysvar`
+  and the `documents`, `named_views`, `ucs` and `layer_states`
+  (`mode: "xrecord"`) features in both maps.
+- **`TOOL_PACKS=all|core,pid,settings`** (default `all`) advertises only the
+  vertical packs a client uses; `core` is always on and unknown names are
+  ignored with a warning. It composes with `TOOL_PROFILE=lean` (which now
+  carries `pid_symbol_insert`, `pid_line_draw` and `pid_graph`, and the five
+  settings essentials: 55 tools, 52 with `TOOL_PACKS=core`) and `ENABLE_3D`;
+  `system_about` reports `tool_packs`. Measured idle cost: 199 tools /
+  59,315 tokens by default, 190 / 55,593 with `TOOL_PACKS=core,settings`,
+  168 / 48,825 with `TOOL_PACKS=core`, 55 / 16,360 lean, 2 / 356 in
+  discovery mode.
+- `PID_LAYERS` (`drawing_apply_iso_layers("pid")`) gains `PROCESS-LINE-TEXT`;
+  `drawing_plan` / `drawing_preflight` report `LAYER_SET_INTENT_MISMATCH`
+  when a P&ID intent is planned onto a non-`pid` layer set.
+- The `prompt_pid_diagram` prompt template is rewritten onto the tools (`pid_from_spec`,
+  `pid_symbol_insert`, `pid_line_draw`, `pid_graph`) instead of describing
+  primitives.
+- `CritiqueFocus` grows by the six `pid_*` values; benchmark matrix v4
+  (`--matrix v3` / `v2` reproduce the earlier sets); correctness suite 29.
+- README release snapshot: 204 tools · 8 resources · 5 prompts · 3284
+  collected tests (this machine; it was 166 · 2423 after track A). CI has
+  not run on this tree yet, and the pre-existing 1369-vs-1363 drift between
+  the README and Linux collection predates both tracks and is superseded by
+  the new figure.
+
+### Not in 1.6
+
+- **Track D — Plant 3D, read-only — is dropped**, and roadmap criterion 5 is
+  withdrawn, not met. The maintainer does not use Plant 3D, and a reader
+  tested against nobody's real projects would be a guess. `TOOL_PACKS` keeps
+  no `plant3d` pack; the `plant` pack is track H's takeoffs.
+- **Roadmap criterion 7 is not met: headless creation is slower than
+  v1.4.0.** Medians of five alternating runs, one CPython 3.11.15 and one
+  ezdxf over each tree's own code: 2,000 line creates 244.5 → 306.1 ms
+  (1.25×), the 10,000-line build / export / reopen 1,847.9 → 2,553.5 ms
+  (1.38×); with `EZDXF_CALL_TIMEOUT=0` still 1.17× and 1.20×. The premium
+  quality pass went the other way, 150.6 → 65.3 ms. A cProfile of the
+  event-loop thread over the 2,000 creates counts 491,071 function calls on
+  1.6.0 against 319,038 on v1.4.0. The timeout is part of the cost, not all
+  of it, and earlier notes that switching it off restored v1.4.0's numbers
+  were wrong. Carried to 1.7.
+- **Four mechanical feature tables ship without rows**: DIN 471/472, DIN 509,
+  DIN 332 and ISO 3601-2. Their drawing code and provenance tests are in;
+  every size is refused by name until rows verified against the standard's
+  own table are transcribed.
+
+### Live COM smoke
+
+`scripts/smoke_pid_com.py`, AutoCAD 2026 (`25.1s (LMS Tech)`), Windows 11,
+2026-09-16, in a new document (`Drawing2.dwg`) — `block_define` →
+`pid_symbol_insert` → `entity_set_xdata` → `pid_line_draw` → `pid_graph` →
+six focuses → `entity_get_xdata`, all through the COM engine, exit 0:
+
+```json
+{
+  "autocad": "25.1s (LMS Tech)",
+  "active_document": "Drawing2.dwg",
+  "handles": {"P-101": "98", "V-201": "A8", "FCV-101": "B8", "FIC-101": "C5", "OP-1": "CF"},
+  "graph_stats": {
+    "nodes_by_kind": {"connector": 1, "equipment": 2, "instrument": 1, "valve": 1},
+    "edges_by_class": {"electric": 1, "process_major": 3},
+    "dangling": 0,
+    "unclassified": 0,
+    "confidence_min": 1.0,
+    "entities_scanned": 16
+  },
+  "crossings_total": 0,
+  "critique_issues": 0,
+  "critique": [],
+  "xdata_chunks": 2
+}
+```
+
+The headless engine reports the identical `graph_stats`, `crossings_total`,
+`critique_issues` and `xdata_chunks` on the same spec. The first attempt
+exited 2 on this machine because of a stale `win32com` `gen_py` cache for the
+AutoCAD type library (a package directory holding only a `__pycache__`) — an
+environment fault, not a backend one; deleting `%TEMP%\gen_py\3.11` cleared
+it and no backend change was needed.
+
+### Live COM smoke — settings (track E)
+
+`scripts/smoke_settings_com.py --build-dwt`, AutoCAD 2026 (`25.1s (LMS Tech)`),
+Windows 11, 2026-09-22, in a new document (`Drawing27.dwg`) — styles →
+page setup → `batch_plot` (the PDF's own `/MediaBox`) → the five `.dwt` twins
+built and `iso_a3_mech.dwt` reopened → layer state round trip → named view →
+UCS → preferences (one reversible set) → SummaryInfo → prompt line, all
+through the COM engine, exit 0:
+
+```json
+{
+  "autocad": "25.1s (LMS Tech)",
+  "system_launch": {
+    "launched": false,
+    "attached": true,
+    "version": "25.1s (LMS Tech)",
+    "document": "Drawing9.dwg",
+    "visible": true,
+    "progid": "AutoCAD.Application",
+    "backend": "com"
+  },
+  "dwt_built": [
+    {
+      "name": "iso_a3_mech",
+      "path": "templates\\iso_a3_mech.dwt",
+      "bytes": 18240,
+      "magic": "AC1032",
+      "is_dwg_container": true,
+      "format": "dwt"
+    },
+    {
+      "name": "iso_a1_arch",
+      "path": "templates\\iso_a1_arch.dwt",
+      "bytes": 17281,
+      "magic": "AC1032",
+      "is_dwg_container": true,
+      "format": "dwt"
+    },
+    {
+      "name": "iso_a3_pid",
+      "path": "templates\\iso_a3_pid.dwt",
+      "bytes": 18528,
+      "magic": "AC1032",
+      "is_dwg_container": true,
+      "format": "dwt"
+    },
+    {
+      "name": "ansi_b_mech",
+      "path": "templates\\ansi_b_mech.dwt",
+      "bytes": 17250,
+      "magic": "AC1032",
+      "is_dwg_container": true,
+      "format": "dwt"
+    },
+    {
+      "name": "ansi_d_arch",
+      "path": "templates\\ansi_d_arch.dwt",
+      "bytes": 17278,
+      "magic": "AC1032",
+      "is_dwg_container": true,
+      "format": "dwt"
+    }
+  ],
+  "document": "Drawing27.dwg",
+  "styles": {
+    "dimstyle": {
+      "ok": true,
+      "name": "ISO-25-SMOKE",
+      "values": {
+        "DIMTXT": 2.5,
+        "DIMASZ": 2.5,
+        "DIMEXE": 1.25,
+        "DIMEXO": 0.625,
+        "DIMGAP": 0.625,
+        "DIMTAD": 1,
+        "DIMTIH": 0,
+        "DIMTOH": 0,
+        "DIMDEC": 2,
+        "DIMDSEP": ",",
+        "DIMLUNIT": 2,
+        "DIMZIN": 8,
+        "DIMBLK": "",
+        "DIMTXSTY": "ISOCP",
+        "DIMLWD": -2,
+        "DIMLWE": -2,
+        "DIMSCALE": 1.0
+      },
+      "written": [
+        "DIMASZ",
+        "DIMBLK",
+        "DIMDEC",
+        "DIMDSEP",
+        "DIMEXE",
+        "DIMEXO",
+        "DIMGAP",
+        "DIMLUNIT",
+        "DIMLWD",
+        "DIMLWE",
+        "DIMSCALE",
+        "DIMTAD",
+        "DIMTIH",
+        "DIMTOH",
+        "DIMTXSTY",
+        "DIMTXT",
+        "DIMZIN"
+      ],
+      "current": true,
+      "textstyle_created": true
+    },
+    "textstyle": {
+      "ok": true,
+      "name": "ISOCP-SMOKE",
+      "font": "isocp.shx",
+      "font_resolved": true,
+      "current": false
+    },
+    "mleaderstyle": {
+      "ok": true,
+      "name": "SMOKE",
+      "values": {
+        "arrow_size": 2.5,
+        "landing_gap": 1.0,
+        "text_style": "ISOCP",
+        "text_height": 2.5
+      },
+      "textstyle_created": false
+    },
+    "mleaderstyles_on_seat": [
+      "SMOKE",
+      "Standard"
+    ]
+  },
+  "page_setup": {
+    "applied": {
+      "paper": "ISO_A3",
+      "orientation": "landscape",
+      "size_mm": [
+        420.0,
+        297.0
+      ],
+      "canonical_media_name": "ISO_A3_(420.00_x_297.00_MM)",
+      "plot_style": "monochrome.ctb",
+      "plot_style_known": true,
+      "scale": "1:1",
+      "scale_factor": 1.0,
+      "scale_ratio": [
+        1.0,
+        1.0
+      ],
+      "dxf_standard_scale_type": 16,
+      "activex_standard_scale": 16,
+      "plot_area": "layout",
+      "plot_type": 5,
+      "device": "DWG To PDF.pc3",
+      "margins_mm": null,
+      "center": null,
+      "paper_units": "mm"
+    },
+    "changed": {
+      "paper": [
+        "",
+        "ISO_A3"
+      ],
+      "canonical_media_name": [
+        "",
+        "ISO_A3_(420.00_x_297.00_MM)"
+      ],
+      "size_mm": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          420.0,
+          297.0
+        ]
+      ],
+      "plot_style": [
+        "",
+        "monochrome.ctb"
+      ],
+      "device": [
+        "Microsoft Print to PDF",
+        "DWG To PDF.pc3"
+      ],
+      "margins_mm": [
+        [
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        [
+          17.0,
+          17.0,
+          5.0,
+          5.0
+        ]
+      ],
+      "paper_units": [
+        "inches",
+        "mm"
+      ]
+    },
+    "pdf": {
+      "layout": "Layout1",
+      "ok": true,
+      "path": "C:\\Users\\VECTOR\\AppData\\Local\\Temp\\acadmcp_settings_smoke_sapms54v\\Drawing27-Layout1.pdf",
+      "bytes": 2774,
+      "mediabox_mm": [
+        420.158,
+        297.039
+      ],
+      "paper": "ISO_A3"
+    },
+    "installed_plot_styles": [
+      "Autodesk-Color.stb",
+      "Autodesk-MONO.stb",
+      "DWF Virtual Pens.ctb",
+      "Fill Patterns.ctb",
+      "Grayscale.ctb",
+      "Screening 100%.ctb",
+      "Screening 25%.ctb",
+      "Screening 50%.ctb",
+      "Screening 75%.ctb",
+      "acad.ctb",
+      "acad.stb",
+      "monochrome.ctb",
+      "monochrome.stb"
+    ]
+  },
+  "template": {
+    "path": "C:\\Users\\VECTOR\\Documents\\GitHub\\Autocad-MCP\\templates\\iso_a3_mech.dwt",
+    "source": "bundled",
+    "document": "Drawing28.dwg",
+    "dimstyle_current": [
+      "ISO-25"
+    ],
+    "papers": [
+      "ISO_A3"
+    ]
+  },
+  "documents": [
+    {
+      "name": "Drawing9.dwg",
+      "path": null,
+      "active": false,
+      "saved": false,
+      "entity_count": 0
+    },
+    {
+      "name": "Drawing27.dwg",
+      "path": null,
+      "active": true,
+      "saved": false,
+      "entity_count": 0
+    }
+  ],
+  "layer_state": {
+    "saved": {
+      "ok": true,
+      "name": "SMOKE",
+      "layer_count": 3,
+      "replaced": false,
+      "chunks": 2,
+      "backend": "com"
+    },
+    "restored": {
+      "ok": true,
+      "name": "SMOKE",
+      "applied": {
+        "layers": 3,
+        "properties": [
+          "on",
+          "frozen",
+          "locked",
+          "color",
+          "linetype",
+          "lineweight",
+          "plot",
+          "current"
+        ],
+        "current_layer": "0"
+      },
+      "missing_layers": [],
+      "new_layers": [],
+      "backend": "com"
+    },
+    "deleted": {
+      "ok": true,
+      "deleted": "SMOKE",
+      "backend": "com"
+    }
+  },
+  "view": {
+    "saved": {
+      "ok": true,
+      "name": "SMOKE_VIEW",
+      "center": [
+        100.0,
+        50.0
+      ],
+      "height": 80.0,
+      "width": 160.9964412811388,
+      "replaced": false,
+      "backend": "com"
+    },
+    "restored": {
+      "ok": true,
+      "name": "SMOKE_VIEW",
+      "center": [
+        100.0,
+        50.0
+      ],
+      "height": 80.0,
+      "width": 160.9964412811388,
+      "applied": "zoom_window",
+      "backend": "com",
+      "viewctr": [
+        100.0,
+        50.0
+      ],
+      "viewsize": 80.0
+    }
+  },
+  "ucs": {
+    "set": {
+      "ok": true,
+      "name": "SMOKE_UCS",
+      "origin": [
+        10.0,
+        20.0,
+        0.0
+      ],
+      "x_axis": [
+        1.0,
+        0.0,
+        0.0
+      ],
+      "y_axis": [
+        0.0,
+        1.0,
+        0.0
+      ],
+      "replaced": false,
+      "current": true,
+      "backend": "com"
+    },
+    "world": {
+      "ok": true,
+      "name": "world",
+      "current": true,
+      "backend": "com"
+    }
+  },
+  "preferences": {
+    "cursor_size": 5,
+    "read_only": [
+      "Files.SupportPath",
+      "Files.TemplateDwgPath",
+      "Files.PrinterStyleSheetPath",
+      "Files.PrinterConfigPath"
+    ],
+    "template_dwg_path": "C:\\Users\\VECTOR\\AppData\\Local\\Autodesk\\AutoCAD 2026\\R25.1\\enu\\Template"
+  },
+  "properties": {
+    "set": {
+      "ok": true,
+      "summary_written": [
+        "author",
+        "title"
+      ],
+      "custom_written": [
+        "ACADMCP_SMOKE"
+      ],
+      "custom_deleted": [],
+      "backend": "com"
+    },
+    "get": {
+      "summary": {
+        "title": "ACADMCP settings smoke",
+        "subject": "",
+        "author": "smoke_settings_com.py",
+        "keywords": "",
+        "comments": ""
+      },
+      "summary_available": true,
+      "custom": {
+        "ACADMCP_SMOKE": "1"
+      },
+      "backend": "com"
+    }
+  },
+  "prompt_message": {
+    "ok": true,
+    "text": "ACADMCP settings smoke: done",
+    "backend": "com"
+  },
+  "failures": []
+}
+```
+
+The headless engine reports the identical `mediabox_mm` (to 1e-9: matplotlib
+writes an exact 420 × 297; AutoCAD's PDF driver writes 420.158 × 297.039,
+inside spec §9's ±0.5 mm), `layer_state.restored` and `properties.get.custom`
+on the same steps; `summary_available` is `false` headlessly and the five
+summary fields are `null` (capability `dwgprops`).
+
+What the run refused before the green one, each fixed in the backend and
+pinned by a fake-ActiveX test:
+
+- Three runs died with `RPC_E_CALL_REJECTED` (-2147418111) on the read that
+  follows a document switch — `Documents.Count` straight after
+  `Documents.Open`, after `Close(False)` inside `document_close`, and in
+  `_ensure_document_state` — AutoCAD's own message filter refusing the call
+  while it still switches documents. pywin32 has no
+  `CoRegisterMessageFilter`, so the backend now waits that window out itself
+  (`_wait_out_rejected_call`, read-only callables only, 0.25 s → 1 s pauses
+  inside a 20 s budget) at those sites; any other error is not retried.
+- `layer_list` on the reopened template raised `AttributeError: 'IAcadLayer'
+  object has no attribute 'Color'. Did you mean: 'color'?`. The type library
+  spells `IAcadEntity` / `IAcadLayer` `color` and `Lineweight`; late-bound
+  dispatch resolved `.Color` / `.LineWeight` case-insensitively, but once a
+  makepy cache exists (this machine's was regenerated on 2026-09-17) every
+  object a method returns is a generated wrapper and the lookup is exact. The
+  backend now spells both members as the type library does (works on both
+  wrappers) and the fakes model the measured names.
+- `layer_state_restore` raised `'IAcadObject' object has no attribute
+  'Count'`: `Dictionaries.Item` and `IAcadDictionary.Item` are declared
+  `IAcadObject*` (the narrowing `_com_unnarrow` already handled for MLEADER
+  styles); the save before it went through the typed `Dictionaries.Add`, so
+  only the reopen paths failed. Both now un-narrow.
+- A state saved with layer `0` current came back with two warnings and `0`
+  unapplied: the `Freeze` put on layer `0` raises 'Invalid layer' whatever
+  the value, even `False` while thawed (measured on a scratch document;
+  `color` / `Linetype` / `Lineweight` / `Plottable` / `LayerOn` / `Lock` /
+  `ActiveLayer` all fine on it). `Freeze` is now written only when it would
+  change the layer.
+- Two of the smoke's own expectations predated the merged tree and were
+  corrected to it: `mleaderstyle_create` is implemented on COM through the
+  `ACAD_MLEADERSTYLE` dictionary (spec §4: no `mleaderstyle` key exists), so
+  the smoke now asserts the created style is listed with `arrow_size` 2.5;
+  and `plot_style_list` marks catalogue rows with `installed: true` (the
+  `source: "installed"` rows are files the catalogue does not know), so the
+  `monochrome.ctb` check reads that flag.
+
+`--interactive` (`user_pick_point`) was not run in this session: the seat is
+shared with other agents and nobody was confirmed at the keyboard, and an
+unanswered `Utility.GetPoint` holds AutoCAD's command line — every COM client
+gets `RPC_E_CALL_REJECTED` — until someone presses Esc, past the 60 s timeout.
+The pick path was executed live earlier in the track (Task 23's measurement:
+`GetPoint` answers in WCS while `GetEntity` answers in the current UCS). Each
+plot also dropped AutoCAD's `plot.log` into the repo root; it is ignored now.
+
+### Live COM smoke — mechanical parts and the sheet (tracks B + G)
+
+`scripts/smoke_mech_com.py`, AutoCAD 2026 (`25.1s (LMS Tech)`), Windows 11,
+2026-09-23, in new documents only (an xref source saved and closed first, then
+the sheet) — `apply_layer_set("mech")` → `apply_titleblock` (A3, zones, marks)
+→ `draw_part` → `add_view(section)` → `dimension_part` → `insert_std_part` →
+`weld_symbol_prims` → `extract_records` → `draw_bom_table` → `add_balloon` →
+`xref_attach` / `xref_manage("list")` / `xref_manage("detach")` →
+`run_critique(focus=None)` → `drawing_export_dwg("R2018")`, all through the COM
+engine, exit 0, every scratch document closed afterwards:
+
+```json
+{
+  "autocad": "25.1s (LMS Tech)",
+  "part_id": "103",
+  "views": 2,
+  "section_omitted": [],
+  "dimensions": 12,
+  "bolt_handle": "2F7",
+  "xdata_chunks": 1,
+  "parts_list_rows": 1,
+  "parts_list_representation": "native",
+  "balloon": "31A",
+  "xref_attached": "XREF_SOURCE",
+  "xref_listed": 1,
+  "xref_detached": true,
+  "xrefs_after_detach": 0,
+  "dwg": {
+    "path": "%TEMP%\\mech_smoke_*\\mech_smoke.dwg",
+    "exists": true,
+    "bytes": 31687,
+    "magic": "AC1032"
+  },
+  "critique_issues": 0,
+  "critique": []
+}
+```
+
+The first runs found the four live defects listed under **Fixed** (the `MECH`
+layer, `BLOCKREFERENCE`, the dimension `text_position`, the refused LINE read)
+and one harness fault: the first call after `Documents.Add` can be refused with
+`RPC_E_CALL_REJECTED` while the new document initialises, and a refused
+cleanup then left the scratch document open. The smoke retries refused calls
+for up to 90 s (a refused call was not executed) and tracks its documents by
+the document list rather than by an assumed name, because `SaveAs` renames the
+document it writes.
+
+### Live COM smoke — architecture (track F)
+
+`scripts/smoke_arch_com.py`, AutoCAD 2026, Windows 11, in a new document only —
+`draw_plan_from_spec(EXAMPLE_SPEC)` (walls, openings, stair, two room labels,
+chains, three schedules in one transaction) → `read_plan` → `rooms_detect` →
+`run_critique(focus=None)`, all through the COM engine, exit 0, the scratch
+document closed afterwards:
+
+```json
+{
+  "autocad": "25.1s (LMS Tech)",
+  "walls": [
+    "EXT",
+    "INT"
+  ],
+  "openings": [
+    "D1",
+    "D2",
+    "W1",
+    "W2"
+  ],
+  "omitted": [],
+  "stairs": 1,
+  "schedules": [
+    {
+      "kind": "doors",
+      "representation": "native",
+      "rows": 2
+    },
+    {
+      "kind": "windows",
+      "representation": "native",
+      "rows": 2
+    },
+    {
+      "kind": "rooms",
+      "representation": "native",
+      "rows": 3
+    }
+  ],
+  "rooms": {
+    "01": {
+      "label_mm2": 27743750.0,
+      "detected_mm2": 27743750.0,
+      "hand_mm2": 27743750.0,
+      "agrees": true
+    },
+    "02": {
+      "label_mm2": 21993750.0,
+      "detected_mm2": 21993750.0,
+      "hand_mm2": 21993750.0,
+      "agrees": true
+    }
+  },
+  "faces_detected": 2,
+  "confidence_min": 1.0,
+  "critique_issues": 0,
+  "critique": []
+}
+```
+
+The first run exited 1: the first room label was refused because the room
+reader found 0 wall segments on `A-WALL-E-N` — the `entity_list` narrowing
+listed under **Fixed**. The run above is the one after the fix.
+
+### Live COM smoke — understanding (track H)
+
+`scripts/smoke_understand_com.py`, AutoCAD 2026, Windows 11, on the synthetic
+plant pair only — `take_snapshot` of `pid.dxf` opened live, the same P&ID
+saved as DWG and read back through the read-only DWG route, `take_snapshot`
+of `layout.dxf`, `pipe_rows` / `cable_rows` on the live snapshots against the
+pair's truth, then one tag moved 10 mm and `diff_snapshots` of the layout
+before and after, all through the COM engine, exit 0, every document closed:
+
+```json
+{
+  "autocad": "25.1s (LMS Tech)",
+  "export_s": 0.104,
+  "live_pid_source": "live:pid.dxf",
+  "dwg_pid_source": "live:pid.dwg",
+  "model_space": {
+    "pid_file": {
+      "ARC": 1,
+      "INSERT": 15,
+      "LINE": 8,
+      "LWPOLYLINE": 8,
+      "MTEXT": 8,
+      "TEXT": 31
+    },
+    "pid_live": {
+      "ARC": 1,
+      "INSERT": 15,
+      "LINE": 8,
+      "LWPOLYLINE": 8,
+      "MTEXT": 8,
+      "TEXT": 31
+    },
+    "pid_dwg": {
+      "ARC": 1,
+      "INSERT": 15,
+      "LINE": 8,
+      "LWPOLYLINE": 8,
+      "MTEXT": 8,
+      "TEXT": 31
+    },
+    "layout_file": {
+      "CIRCLE": 18,
+      "LINE": 25,
+      "LWPOLYLINE": 4,
+      "MULTILEADER": 8,
+      "TEXT": 26
+    },
+    "layout_live": {
+      "CIRCLE": 18,
+      "LINE": 25,
+      "LWPOLYLINE": 4,
+      "MULTILEADER": 8,
+      "TEXT": 26
+    }
+  },
+  "paper_space_layouts": [],
+  "takeoffs": {
+    "scale_verdict": "schematic",
+    "within_10pct": 0.21818181818181817,
+    "runs_checked": 9,
+    "pipe_mismatch": [],
+    "loads_checked": 4,
+    "cable_mismatch": []
+  },
+  "diff": {
+    "moved": "44",
+    "added": 0,
+    "removed": 0,
+    "changed": 1,
+    "moved_is_the_change": true
+  }
+}
+```
+
+The smoke works only in documents it brought in from its own temporary
+folder, known by full path; each live snapshot, the DWG save and the move
+first check, in the same COM-thread call, that the active document is the
+smoke's own, and on the way out it re-activates the document that was active
+when it started.
+
+## [1.5.1] — 2026-08-06
+
+A patch for three defects found *after* 1.5.0 went to PyPI, two of them by the
+adversarial pass over the rewritten README. 1.5.0 is yanked: its diameter and
+radius callouts put wrong numbers on drawings at default settings, and that is
+not something to leave installable.
+
+### Fixed
+
+- **The HTTP bind guard failed open on the launch path it was written for.**
+  `_guarded_run_async` read the bind address from the `host` kwarg and treated
+  an absent one as loopback. It is not: `fastmcp run` forwards that kwarg only
+  when `--host` was passed, and otherwise fastmcp resolves the host from
+  `fastmcp.settings.host`, which is environment-backed. So
+  `FASTMCP_HOST=0.0.0.0 fastmcp run server.py:mcp --transport http` bound every
+  interface — 149 tools including file open/save and AutoCAD command execution,
+  with no token — while the guard inspected the literal string `"127.0.0.1"`
+  and waved it through. v1.4.0's changelog claimed the guard "now fires on
+  every launch path"; it fired, and then looked at the wrong host. It now
+  resolves the effective host, and says so in a warning if it cannot.
+- **`[com]` and `[full]` could not be installed off Windows.** Both extras
+  listed `pywin32>=306` with no environment marker, and pywin32 publishes
+  Windows wheels and *no sdist* — so `pip install autocad-mcp-pro[full]` died
+  at resolution on Linux and macOS, and `[full]` is the extra this project's
+  own README recommended to contributors. CI never caught it because every
+  Linux lane installs `[pdf]` or syncs from `uv.lock`, whose resolution markers
+  hide the gap. Both entries now carry `; sys_platform == "win32"`, and a
+  release-consistency test fails if a Windows-only distribution loses its
+  marker again.
+- **`drawing_settings({"dimscale": ...})` reported success and changed nothing
+  headlessly.** It writes the `$DIMSCALE` header variable, which is what
+  AutoCAD consults when it draws a dimension — so the call worked on the live
+  backend. ezdxf renders from the dimstyle table entry and never reads the
+  header, so the same call produced two different drawings on the two engines
+  while both said `ok`. The header value is now folded into the per-dimension
+  override on all five dimension tools, including `dimension_aligned` and
+  `dimension_angular`, which do not share the tolerance-override path and were
+  missed by the obvious fix. DIMSCALE 1.0 writes no override.
+
+### Changed
+
+- README: the "What you get" table qualified every engine-conditional family
+  (boundary tracing, WIPEOUT/REVCLOUD/MTEXT masks, CHSPACE, typed hatch edge
+  paths, headless undo) instead of listing them as if both engines had them,
+  and the checkout install line no longer recommends an extra that cannot
+  resolve on the reader's platform.
+
+## [1.5.0] — 2026-08-06
+
+### Added
+
+- **Selection filters — 3 tools.** `selection_window` (AutoCAD's ssget
+  window/crossing), `selection_polygon` and `selection_filter` (QSELECT).
+  Window returns only entities wholly inside; crossing also returns the ones
+  straddling the edge — the modes are reported back and `window` is the
+  default, because the over-selecting mode must never be the implicit one. A
+  zero-area box is refused rather than answered with an empty list, which would
+  read as "nothing there".
+  `selection_filter` takes named parameters rather than a query string
+  deliberately: ezdxf's query language answers an unknown attribute with an
+  empty result, so `LINE[nosuchattr=='x']` is indistinguishable from "no
+  matches". Here a typo is a `TypeError` at the boundary, and `filtered_by`
+  reports which filters actually ran. `min_area` excludes shapes that have no
+  area at all rather than treating them as zero, and a negative `min_area` is
+  refused — no area is negative.
+- **Boundary tracing — 2 tools, and five deliberately not built.**
+  `boundary_trace` is AutoCAD's BOUNDARY/BPOLY: a seed point in, the nearest
+  enclosing closed polyline out. It never calls `edgeminer.find_all_loops` —
+  measured at **63.9 s for 40 edges and a TimeoutError at 60**, because the
+  docstring's O(n!) is real — and walks one loop per seed-adjacent edge
+  instead, which is 0.0057 s at the same size. Straight edges are split where
+  they cross, so a construction line drawn across a shape actually divides it;
+  without that the line shares no endpoint with anything and is invisible to
+  the edge graph. Curved edges are not split, and the capability says so.
+  Two things the obvious implementation gets silently wrong, both now tested:
+  `edgesmith.lwpolyline_from_chain` emits n+1 points with the last duplicating
+  the first and `closed` left False — a polyline that draws like a square and
+  behaves like an open path to hatch association, area queries and
+  `entity_offset`; and `edgesmith.loop_area` works off edge endpoints, so two
+  semicircular arcs closing into a circle measure **0.0** against a true
+  314.159. The area now comes from the flattened curve and each curved edge
+  keeps its bulge.
+  **Not built: every REGION and 2D-boolean tool the plan listed.** ezdxf cannot
+  author a REGION — `add_region()` returns one with zero ACIS bytes — and the
+  substitute, `greiner_hormann`, takes flat vertex lists. Measured on a square
+  with one edge bulged into a semicircle, routing it through that boolean loses
+  **28.2% of the area and 12.5% of the perimeter**. That is the same magnitude
+  as the `analysis_measure_area` bug this release fixed, and shipping it would
+  have re-introduced the class.
+- **Hatch depth — 3 tools.** `hatch_set_gradient`, `hatch_edit` and
+  `hatch_add_boundary`. `hatch_edit` leaves omitted parameters alone — a
+  partial edit that resets the rest is data loss — and `changed` reports the
+  attributes that actually *moved*, so re-setting a value to what it already
+  was comes back empty rather than as a false positive. `hatch_add_boundary`
+  takes typed edges (line/arc/ellipse) because a boundary API that only accepts
+  vertex lists silently straightens every curve it is given; every edge is
+  validated before any is written, so a malformed list refuses instead of
+  leaving a half-built path. On COM it refuses with
+  `capability: "hatch_edge_paths"`: ActiveX appends boundary loops as existing
+  objects, not as typed edges, so the fidelity this tool exists for cannot be
+  expressed there.
+- **`analysis_list_properties` — AutoCAD's LIST.** The raw DXF attribute set
+  for one handle, which `entity_get` deliberately does not carry. It cannot be
+  handed over as-is for two reasons, both fixed here: `dxfattribs()` holds
+  `Vec3` values and is not JSON-serialisable, and its coordinates are in the
+  entity's own frame, so for anything with an extrusion they would contradict
+  every other coordinate this server reports.
+- **Annotation objects — 4 tools.** `entity_create_wipeout` (mask what is
+  behind a closed polygon), `entity_create_revcloud`, `text_set_background`
+  (MTEXT background mask) and `text_find_replace`. Each carries a refusal that
+  was measured rather than assumed. A wipeout of fewer than three points
+  encloses no area, so it is refused instead of returning a handle to a mask
+  that masks nothing. A revision cloud *is* its arcs — `ezdxf.revcloud`'s own
+  helper stamps the `RevcloudProps` xdata and takes the bulge sign from the
+  winding direction, so the result satisfies `is_revcloud()` — and a
+  `segment_length` longer than the shortest edge produces no arcs at all, which
+  would be a plain rectangle reported as a cloud; that case is refused.
+  `text_set_background` refuses TEXT (only MTEXT has a background-fill
+  attribute, so setting one on TEXT would report success and change nothing)
+  and refuses a scale below 1.0 (a box smaller than its text is a stripe
+  through the text).
+  `text_find_replace` searches TEXT, MTEXT, ATTRIB **and** ATTDEF, including
+  inside block definitions — leaving the ATTDEF behind would fix the drawing
+  and reintroduce the old text on the next insert. It returns
+  `searched_types`, because "no matches" and "that type was never searched" are
+  different answers and a caller cannot otherwise tell them apart. DIMENSION
+  text is deliberately out of scope: its text field holds the `<>` override
+  placeholder rather than the measurement, so editing it would either do
+  nothing or detach the dimension from what it measures — the response says so.
+  On COM, `entity_create_revcloud` refuses with `capability: "revcloud"`:
+  ActiveX has no revision-cloud member and driving the command blind against a
+  live drawing is unverified.
+- **The rest of the paper-space lifecycle — 8 tools.** v1.4 could make a sheet
+  and never unmake it. Added `layout_delete`, `layout_rename`, `layout_copy`,
+  `viewport_list`, `viewport_set_scale`, `viewport_lock`, `viewport_delete` and
+  `entity_change_space` (CHSPACE). Verified headless (ezdxf); the COM paths for
+  the first seven are implemented against the ActiveX reference but **never
+  executed against a live AutoCAD**, and each is marked so in the source.
+  Most of the work went into refusals, because ezdxf's own guards stop short of
+  where a tool boundary has to: `layouts.delete("")` deletes the *first* sheet
+  rather than refusing, `layouts.get("")` resolves to whichever is active, and
+  `layouts.rename()` skips the name validation `new()` performs, so `Bad/Name`
+  and even `""` land in the table and the file still audits clean. Deleting or
+  renaming the current tab used to leave three different answers to "where does
+  my next line go?" — `layout_list` said one thing, `$TILEMODE` another, and
+  `_msp()` quietly wrote to model space; all three now agree. A handle from a
+  deleted sheet refuses instead of dying with `AttributeError` (`entitydb.get`
+  is documented not to filter destroyed entities, and `_get_entity` believed
+  it).
+  `layout_copy` is a construction — ezdxf has no layout-copy API and
+  `xref.load_paperspace` is cross-document only — and every way it can go wrong
+  is invisible to the Auditor, which reports zero errors on a duplicated tab
+  order, two main viewports, and a hatch whose boundary still points into the
+  layout it was copied from and dangles the moment that layout is deleted. All
+  three are prevented structurally; `skipped` and `associativity_dropped` report
+  what could not be carried over rather than letting a bare `ok: true` imply a
+  complete copy.
+  `viewport_list` reports the layout's own main viewport with `is_main: true`
+  rather than hiding it — it is what remains after every drafting viewport is
+  deleted — and refuses to report a scale on R12, where `view_height` and
+  `flags` are dropped on export and `get_scale()` then returns a fabricated
+  number (150.0 measured for a viewport storing no scale at all). The two
+  writers refuse on R12 outright rather than reporting a success the file
+  cannot keep, and `viewport_lock` read-modify-writes the flags bitfield, which
+  also carries the UCS-icon and grid bits a bare assignment would silently drop.
+- **`entity_change_space` (CHSPACE), headless only.** AutoCAD moves objects
+  *through* a viewport, rescaling them so they look identical on screen.
+  ezdxf's `move_to_layout` applies no geometric change whatsoever, so the
+  obvious implementation reports success, turns a 100 mm feature into 100 mm of
+  paper inside a 1:2 viewport, and writes a perfectly clean file. The transform
+  is therefore the tool, and it uses `viewport.get_transformation_matrix()`
+  rather than a hand-rolled one: the hand-rolled version ignores
+  `view_target_point` and misplaced geometry by 25 mm in testing while
+  `is_top_view` was still true and the twist angle still zero — past every guard
+  one would naturally write. A regression test pins the result against what
+  ezdxf's own rendering pipeline projects.
+  It refuses rather than guessing: non-plan and twisted viewports (ezdxf returns
+  a meaningless matrix for the first and rotates about the paper origin for the
+  second), dimensions unless `freeze_dimensions=true` bakes the measurement in
+  first (`transform` halves `get_measurement()` while the baked block text keeps
+  the old value, so one of the two is always lying), ACIS bodies (`transform`
+  is accepted and moves nothing), tables and proxies (`transform` raises, and
+  `hasattr(e, "transform")` is `True` for all of them), viewports themselves,
+  and entities already in the target space. Geometry that lands outside the
+  viewport or off the sheet is moved and **flagged** (`inside_viewport`,
+  `on_sheet`), not refused — AutoCAD allows it too.
+  On the COM backend this refuses with `capability: "chspace"`: ActiveX has no
+  change-space member, so the alternatives are `CopyObjects` + delete or driving
+  the command blind, and neither could be verified against a live seat.
+- **`CAD_PROGID` — the COM ProgID is configurable.** `"AutoCAD.Application"`
+  was hardcoded at both connection sites, so AutoCAD-compatible applications
+  (BricsCAD, ZWCAD, GstarCAD) were unreachable even though they expose the same
+  ActiveX object model. The setting is honoured on *both* paths deliberately:
+  `Dispatch` is not a passive probe — it COM-launches the application and sets
+  `Visible = True` — so honouring the setting on `GetActiveObject` and then
+  falling back would start the very AutoCAD the operator said they were not
+  using. An unrecognised ProgID fails loudly for the same reason, and the error
+  names both the ProgID it tried and the variable to change. `system_status`
+  now reports `cad_progid`, without which a non-AutoCAD operator reads an
+  `autocad_version` key naming a product they do not own.
+  **Caveat, stated everywhere it appears:** `CAD_PROGID` only changes which COM
+  application the backend attaches to — every tool beyond the connection itself
+  is developed and tested against AutoCAD alone, and clone compatibility is
+  unverified, so treat a non-default ProgID as experimental. The candidate
+  ProgIDs in `.env.example` are commented out and marked UNVERIFIED: none has
+  been tested against a running seat.
+
+- **`analysis_measure_entity` — measure the drawing, not your memory of it.**
+  Neither backend could answer "what is the area of the polyline I just drew":
+  `analysis_measure_area` shoelaced points the *caller* typed in, and the live
+  COM backend did the same despite having the document, a `HandleToObject`
+  lookup it already used fourteen times, and an ActiveX `Area` property. The
+  only available workflow was also silently wrong — `entity_get` read LWPOLYLINE
+  vertices through the default format and kept x and y, dropping the **bulge**
+  that makes an edge an arc. Measured on a 100×100 square with one edge bulged
+  into a semicircle: 10000 reported against a true 13926.9908, **28.2% low**,
+  perimeter **12.5% low**, nothing in the response saying so. And
+  `props["length"] = ent.length()` was dead code — `LWPolyline` has no
+  `length()`, so the key never appeared at all.
+  Bulge geometry is always circular, so the new `engineering/measure.py` is
+  exact rather than approximate: shoelace plus each arc's signed circular
+  segment, and arc length for perimeter. `entity_get` now reports `area` and
+  `length` from the same maths. The payload states its own accuracy — `exact`,
+  `flatten_tolerance`, `assumed_closed` (an open boundary is closed the way
+  AutoCAD's AREA does), and `self_intersecting`, because the shoelace *cancels*
+  crossed lobes and a bowtie measures 0.0. REGION/3DSOLID refuse with
+  `capability: "measure_area_acis"` naming the live backend; LINE/TEXT/INSERT
+  raise a plain error, since no engine can give them an area and a capability
+  tag would falsely suggest switching helps. `AREA`/`MEASUREGEOM` now route here
+  rather than at the points-based tool — a drafter typing AREA picks objects,
+  they do not retype coordinates.
+- **Handle grounding: `view_screenshot(overlay_handles=true)`.** A screenshot
+  showed the model what the drawing looks like and nothing it could act on —
+  every modify tool takes a handle, and nothing connected "the circle at the
+  top-left" to a hex string. Each entity is now labelled with its handle at its
+  own bounding-box centre (taken from the renderer's extents, so the label lands
+  where the entity is *drawn* even in a rotated frame). Off by default, because
+  labels are ink on the drawing; past 40 entities the render is capped and the
+  image itself says "handles shown for N of M" rather than letting a labelled
+  subset read as the whole sheet. The live backend captures the AutoCAD window
+  rather than rendering, so there is nothing to label there — it refuses with
+  `capability: "handle_overlay"` instead of quietly returning an unlabelled
+  image, since producing the overlay would mean creating and deleting entities
+  in the user's open drawing.
+- **`block_create_from_entities` works on the live backend.** It refused
+  outright and pointed at `system_run_command` with `_BLOCK`, pushing callers
+  through the free-text escape hatch for something ActiveX does directly
+  (`Blocks.Add` + `Document.CopyObjects`). The tool's own docstring said the
+  opposite — "works by using AutoCAD's BLOCK command (COM backend only)" — so
+  the one engine that could not do it was advertised as the one that could.
+  Both engines now also report `skipped` handles instead of swallowing them, and
+  a call where nothing resolves fails rather than leaving an empty definition
+  behind. COM path unit-tested against a fake ActiveX object, not
+  hardware-verified.
+- **Undo and redo on the headless backend (`EZDXF_UNDO_DEPTH`, default 0).**
+  The plan called this "add redo". The larger half was that **undo never worked
+  either**: `_undo_stack` was declared, read and cleaned up, but nothing ever
+  appended to it, so `drawing_undo` could only answer "Nothing to undo" — while
+  the tool summary said "Step back one operation" and the alias corpus routed
+  `UNDO` and "take that back" straight at it. The old test asserted
+  `isinstance(result, dict)`, which a permanent failure satisfies.
+  It is opt-in because it is not free. ezdxf keeps no journal, so a history step
+  is a whole DXF snapshot: measured 3.1 ms / 19 KB at 10 entities but 130 ms /
+  658 KB at 5000, and switching it on costs **37×** on entity creation (0.18 →
+  6.65 ms per call) even on a small drawing. Off, it costs nothing; on, you get
+  real multi-step undo/redo. Both tools refuse with
+  `capability: "undo_history"` naming the setting rather than pretending. The
+  live COM backend uses AutoCAD's own undo and ignores it. Drawing after an undo
+  discards the redo branch, as in AutoCAD — otherwise redo would restore a state
+  that never existed, with geometry you had removed reappearing beside geometry
+  you drew afterwards.
+- **BREAKING (behavior): geometry now goes into the layout you selected.**
+  `layout_set_current("A3-Sheet")` answered `{"ok": true, "current":
+  "A3-Sheet"}` and then every entity created afterwards landed in **model
+  space** anyway, on both engines — `_msp()` returned model space
+  unconditionally, so the tool reported a state change that changed nothing.
+  Proven: a line drawn straight after selecting a layout was in modelspace and
+  not in the layout. That was also why a title block could not go on a sheet, so
+  `titleblock_apply_iso_a3` gains a `layout` parameter — where a title block
+  belongs, since the border frames the printed sheet rather than the model — and
+  restores your current space afterwards rather than leaving you on the sheet.
+  Existing model-space workflows are unaffected: a fresh drawing starts in model
+  space, and a refused layout switch leaves the current space where it was.
+- **ISO 286 transition and interference holes (K, M, N, P).** `fit="P7"` used to
+  raise by name. They are now derived by the standard's delta rule,
+  `ES = -ei + Δ` with `Δ = IT(n) − IT(n−1)` — a *rule* over the shaft and IT
+  tables already in the module, not new table data, which is why it can be
+  pinned against published values (K7/M7/N7/P7 and K6/N6/P6 cross-checked by
+  hand) instead of merely trusted. Unlocks the hole-basis pairs K7/h6, M7/h6,
+  N7/h6, P7/h6.
+- **ISO 286 interference shafts (r, s, t, u).** `fit="s6"` and `fit="u6"` — the
+  standard press and drive fits — used to raise. Unlike K/M/N/P these *are* new
+  table data, sub-stepped more finely than the main size steps (ISO 286 splits
+  18–30 into 18–24/24–30, 30–50 into 30–40/40–50, and every step above 50 mm in
+  two or three; flattening that is a silent error of tens of microns at exactly
+  the sizes press fits are used at). Because it is data rather than a rule, its
+  **provenance is tested**: every value is cross-checked against ISO 286-1's own
+  derivation formulae, an independent source. `r` reproduces as the geometric
+  mean of `p` and `s` on **24/24** steps — with `p` pinned in this module before
+  `r` existed — and `s`/`t`/`u` track their IT7-based formulae within 1 µm on
+  every step from 18 mm up. The five places where the standard's rounding puts a
+  published value 2–3 µm off its own formula are listed by name in the tests, so
+  a reader holding ISO 286 checks five numbers rather than ninety-five. Shaft `t`
+  is undefined below 24 mm in the standard and refuses there rather than being
+  extrapolated. Unlocks H7/r6, H7/s6, H7/t6 and H7/u6.
+- **Headless performance lane** (`benchmarks/perf_suite.py` +
+  `render_perf_chart.py`): fixed wall-time workloads (2k individual creates,
+  10k build/export/reopen roundtrip, 10k region query, full premium quality
+  pass) measured through the same backend methods the MCP tools call;
+  machine fingerprint recorded, self-measurement only.
+- **Task-matrix chart** (`benchmarks/render_matrix_chart.py`): tasks × servers
+  status heatmap rendered from the published live-run reports, so coverage
+  gaps are visible per capability instead of one folded score.
+- **Tool discovery** (`DISCOVERY_MODE=search`, default `off`): replaces the
+  advertised catalog with `search_tools` + `call_tool`, so a client sees two
+  tools instead of 127. Ranking layers an AutoCAD command / synonym corpus
+  (`discovery/aliases.py`, 132 tools · 148 command tokens · 583 synonyms) over
+  fastmcp's BM25 index, and hits are returned as one compact line per tool
+  rather than full JSON schemas. Measured on a 66-query golden set with a
+  15-query holdout: **top-1 62/66 vs 23/66** for stock BM25, top-3 64/66 vs
+  33/66 (holdout top-3 14/15 vs 9/15); stock returns *nothing at all* for 21 of
+  the 66, and this transform for none of them — that gap is the corpus, not the
+  ranking, and no BM25 parameter closes it. (Both sides moved slightly during
+  the release as tool docstrings were rewritten: better prose feeds *both*
+  indexes, which is why the headline is the top-1 gap rather than a ratio
+  between two scores over a shared corpus.) A `risk` ceiling
+  keeps destructive tools out of read-only answers and says when it hid one.
+  Off by default — flipping it changes what every connected client sees on
+  `list_tools`, which needs its own migration note.
+- **`@cad_tool` — a discovery-metadata channel next to the tool contract.**
+  A decorator written *above* an `mcp.tool` registration attaches a `cad` key
+  to that tool's MCP `meta`: a one-line `summary` for a search hit's preview,
+  a `cost` from a closed set (`read`, `safe`, `mutate`, `destructive`,
+  `escape`) for clients that want to gate or colour-code the surface before
+  calling, and the tool's AutoCAD command names and synonyms — imported from
+  `discovery/aliases.py`, never restated, so the corpus stays the one edit
+  site. `tags=` and `annotations=` deliberately stay on the `mcp.tool` call, so
+  the channel cannot perturb `_tool_groups()` or the registration-counting
+  release gate. Misuse fails at import rather than silently no-opping: an
+  unknown cost raises, and a decorator written below the registration (or on a
+  bare function) raises with the ordering rule in the message. Applied to the
+  three `transaction_*` tools so far; every other tool still falls back to the
+  first line of its docstring in search results, which is why the rollout can
+  be section-by-section instead of a 131-tool patch.
+- **`EZDXF_CALL_TIMEOUT`** (default `120`s, `0` disables): per-call timeout for
+  the headless backend, mirroring `COM_CALL_TIMEOUT`. Every ezdxf method runs
+  under one document lock, so a single hung call previously deadlocked every
+  later tool call.
+- **`uv.lock` — the dependency graph CI actually installs.** 95 packages,
+  resolved universally over `requires-python >=3.11`, so one file serves the
+  Linux 3.11/3.12 matrix and the Windows leg (platform-only packages like
+  pywin32 carry markers). Every lint and test lane now installs with
+  `uv sync --locked`, which *fails* rather than re-resolving when the lock and
+  `pyproject.toml` disagree — a fresh CI run can no longer pick up an upstream
+  release nobody chose, and the locked set is the set the suite is green on.
+  The `package` job stays unlocked on purpose: it is the only job that proves
+  the published dependency *ranges* still resolve for a plain
+  `pip install autocad-mcp-pro`. The `uv.lock` line in `.gitignore` (added when
+  the committed lockfile was stale) is gone with it — a lockfile git ignores is
+  not a lockfile.
+- **Scheduled floating-dependency job** (`.github/workflows/deps-floating.yml`):
+  weekly and on demand, it ignores the lock, resolves the declared ranges fresh
+  on 3.11/3.12 and re-runs the suite. Locked lanes cannot be broken by an
+  upstream release, which also means they cannot *notice* one; this is where a
+  range ceiling that needs moving shows up. It never gates a pull request.
+- **Benchmark matrix v3 — five tasks that can fail.** The v2 matrix scored this
+  server 10/10, which was not evidence of anything: every task in it exercised
+  something the server was built around, so full marks were the only available
+  outcome. `benchmarks/tasks_v3.py` keeps the v2 ten byte-for-byte (their ids
+  and weights key the published v1.4 reports) and adds `tool_discovery`,
+  `token_budget`, `hatch_islands`, `selection_filter` and
+  `measure_from_handle`. Each verifies against a value derived independently of
+  the code under test — a closed-form area, entities placed on purpose, a token
+  ceiling fixed before the measurement. **Three of the five failed while being
+  written**, and the defects they found are in *Fixed* below.
+  Two are renamed from the release plan, and the renames are the point rather
+  than bookkeeping. `tool_discovery_bilingual` lost its "bilingual": the
+  Turkish query normalizer was written and then removed, because this
+  repository is English throughout and the Turkish was inferred from the
+  author's chat language, not required by the product — a task named
+  "bilingual" would benchmark a capability that does not exist.
+  `measurement_massprops` became `measure_from_handle`: no centroid or
+  moment-of-inertia tool ships, since F2 was cut to `entity_measure`.
+  The competitor reports are **not** re-scored. Those servers were pinned and
+  run against v2 at v1.4 and have never been asked these five questions; the
+  matrix chart renders the five rows blank with a `not run` legend entry rather
+  than zero, because an invented zero is indistinguishable from a measured one.
+  `run_competitors` grows `--matrix v2|v3` (v2 stays addressable so a v1.4
+  report can be reproduced rather than only described), records which matrix
+  ran in the report, and grows `--publish`, which writes the artifact-path-free
+  file that `results/published/` holds — that sanitisation used to be a manual
+  edit.
+- A capability refusal in the benchmark runner is now recorded `unsupported`
+  instead of `fail`. The result enum has carried `unsupported` since v2 for
+  exactly this, but a refusal is still an exception and was being caught by the
+  generic handler — "your engine cannot reach this" and "your server got this
+  wrong" are different findings about a competitor.
+- Five checks added to `correctness_suite.py` (26, was 21), and the two kinds
+  read differently in the A/B table. Three measurement checks are new
+  capability — v1.4.0 misses them by not having the method (`miss → pass`) —
+  and are there because all three broke during this release. Two dimension
+  checks are repaired defects: v1.4.0 has the methods and gets them wrong
+  (`fail → pass`). Result against v1.4.0: 21/26 → 26/26, five fixed, zero
+  regressed.
+
+### Changed
+
+- **The backend contract is 19 modules instead of one 1854-line file, and
+  optional methods are declarative.** `backends/base.py` held a single ABC with
+  112 abstract methods; adding one made *both* backends fail at instantiation
+  until both were written, and two test modules construct `ComBackend` at
+  import time, so a half-finished contract edit took the entire suite red. The
+  interface now lives in `backends/contracts/`, one module per domain, split
+  along the section markers that were already in the file — the seams were not
+  re-decided. `AutoCADBackend` is the composition of all 19 and stays the
+  import surface, so `from backends.base import AutoCADBackend` and every
+  `isinstance` check are unchanged, and the abstract-method count is identical
+  before and after.
+  The split surfaced something the file's name hid: roughly 740 of those lines
+  are shared *concrete* implementation (premium meta-tools, GD&T, the settings
+  facade), not interface. Those slices are mixins and are labelled as such
+  rather than presented as pure contracts.
+  New `backends/capability.py` carries `@capability(key, reason=...)`, which
+  marks a contract method optional and supplies a default. The default
+  **raises** `UnsupportedCapabilityError` rather than returning a quiet
+  `{"ok": False}` — a method nobody implemented has to be indistinguishable
+  from a deliberate refusal, not from a soft failure, which is the distinction
+  this release spent a milestone restoring. A key used by the decorator must be
+  declared in *both* capability maps or `tests/test_capability_contract.py`
+  fails; without that gate the decorator would just be a way to ship refusals
+  `system_capabilities` never mentions, which is worse than the build break it
+  replaces. Its first user is COM's `entity_change_space`, which now inherits
+  the refusal instead of hand-rolling it. The refusal vocabulary moved into
+  this module as well (the contracts need it and `base` imports the contracts);
+  `backends.base` re-exports it, so there is still exactly one exception class
+  object in play.
+- **BREAKING (env): the `core` tool profile was removed.** `TOOL_PROFILE` is
+  now `lean` or `full`; the discovery layer above solves the crowded-surface
+  problem `core` existed for. `TOOL_PROFILE=core` still boots — it falls back
+  to `full` with a warning naming the removal, and `system_about` reports the
+  requested profile alongside the applied one.
+
+- **BREAKING (install): `ezdxf>=1.4` is now the floor** (was `>=1.3`). The 1.4
+  line is the only one this release is developed and tested against; 1.3 is no
+  longer exercised by CI and is unsupported. Upgrade with
+  `pip install -U "ezdxf>=1.4"`.
+- **Runtime pins narrowed.** A published library cannot pin exactly and stay
+  co-installable, so what a user's `pip install` gets is still a range — and a
+  range is the only guard that install has. They are therefore deliberately
+  narrow. (`uv.lock`, above, is the exact guard on *our* side; the two are not
+  substitutes for each other.)
+  - `fastmcp>=3.0` → `fastmcp>=3.4.5,<3.5`. `fastmcp` is now a thin
+    meta-package (`Requires-Dist: fastmcp-slim[client,server]`) and 3.x moves
+    fast enough that a new minor can reshape the API the server is built on.
+    Tested against 3.4.5; the ceiling moves only after the suite is re-run.
+  - `ezdxf>=1.3` → `ezdxf>=1.4,<2` (see the BREAKING note above).
+  - `pydantic>=2.0` → `pydantic>=2.0,<3`, so a future pydantic 3 cannot be
+    pulled into an install of this release.
+- **Rendering requires an extra — documented, not changed.**
+  `ezdxf.addons.drawing.__init__` imports `.frontend`, which does an
+  unconditional top-level `import PIL.Image`. Pillow is therefore a hard
+  requirement of *every* ezdxf render path (PNG screenshot and PDF export
+  alike), not just of the COM window-capture path it is listed under. A bare
+  `pip install autocad-mcp-pro` resolves 77 packages with neither Pillow nor
+  matplotlib, so it cannot render at all; `[pdf]` (or `[full]`) is required,
+  and satisfies Pillow transitively via matplotlib. Note that `[com]` alone
+  installs Pillow but not matplotlib, so the ezdxf backend still cannot render
+  under it. Pillow deliberately stays out of the core dependencies for now.
+- **CI lint pinned to `ruff==0.16.1`** (was an unpinned `pip install ruff` /
+  `ruff>=0.8`). The version is now written in exactly one place —
+  `[dependency-groups] dev` — and frozen there by `uv.lock`; the workflows
+  install ruff *from* the lock instead of restating the pin, so the three
+  copies that had to be bumped together no longer exist.
+- **Dev toolchain moved to a PEP 735 dependency group.** `[tool.uv]
+  dev-dependencies`, which uv now warns is deprecated, became
+  `[dependency-groups] dev` — same four tools, byte-identical resolution. The
+  standard spelling is also understood by pip >=25.1, so `pip install --group
+  dev` gives contributors who do not use uv the same list without a second
+  copy of it.
+- **CI and the release gate install from the lock.** `lint` (dev group only —
+  ruff without building the project), `test-linux`, `test-windows` and the
+  `release.yml` test job now run `uv sync --locked` + `uv run --no-sync`, with
+  uv itself pinned in the workflow env for the same reason ruff is. `package`,
+  `docker` and `registry-validate` are unchanged. `benchmark.yml` is locked
+  too: that lane publishes evidence, and an ezdxf release moving our own
+  numbers between runs would make the diff unattributable.
+- README rebuilt: PyPI-first install, a four-lane benchmark section with
+  Python-generated visuals (scores, task matrix, performance, source review),
+  v1.4 feature table, updated client/config/roadmap sections.
+- `render_live_chart` now skips non-task-matrix reports so multiple lanes can
+  share `benchmarks/results/published/`.
+
+### Fixed
+
+- **The COM paths were run against a live AutoCAD 2026, and four of them were
+  broken.** Every COM implementation added in this release was written against
+  the ActiveX reference and shipped labelled unverified. Executing them against
+  a real seat — a fresh instance, a throwaway drawing, nothing saved — found
+  four defects that no amount of reading would have caught, one of them
+  pre-existing:
+  * **`AcadPViewport` has no `ViewCenter` member.** `viewport_list` died on it
+    outright. Worse, `viewport_create` has carried the same line since v1.4
+    wrapped in a bare `except: pass`, so it raised on every single call and
+    said nothing — every COM viewport has been looking at the model origin
+    instead of the `view_center_x/y` the caller asked for. The member is
+    `Target`, and the failure is no longer swallowed.
+  * **`ModelSpace.AddWipeout` does not exist.** ActiveX has no wipeout
+    constructor at all; WIPEOUT is a command. Now a typed refusal
+    (`capability: "wipeout"`) instead of an `AttributeError`.
+  * **`AcDbMText.BackgroundFillColor` does not exist** — it raises on read as
+    well as on write, with an int and with an `AcCmColor` object alike.
+    `BackgroundFill` (the on/off flag) does work, so `text_set_background`
+    enables and disables the mask on COM and refuses a *colour* request with
+    `capability: "mtext_background_color"`, rather than switching the fill on
+    in the wrong colour and reporting success.
+  * `analysis_list_properties` called a helper that does not exist on the class.
+  After the fixes, all 25 verification calls behave correctly: 18 succeed, 1
+  refuses per-argument (deleting model space), and 6 refuse with the capability
+  keys they declare. The remaining COM refusals
+  (`chspace`, `revcloud`, `boundary_trace`, `hatch_edge_paths`) were confirmed
+  to hold rather than leak a result. The source comments now say VERIFIED with
+  the date instead of UNVERIFIED.
+- **The headless renderer *does* project model content through viewports.
+  v1.4 said it did not.** `viewport_render` was declared unsupported on ezdxf,
+  every `drawing_export_pdf(layout=...)` response carried the note "projecting
+  model content through viewports is COM-only", and the README table agreed —
+  so a caller with no AutoCAD was told to go get one for something that already
+  worked. Measured on ezdxf 1.4.4: a sheet holding *nothing but a viewport*
+  renders the model geometry that viewport looks at, two viewports at 1:1 and
+  1:2 render the same circle at two sizes in the right places, and geometry
+  outside a viewport's window is correctly left out. Understating a capability
+  is the same class of untruth as overstating one, and it is the more expensive
+  one for the user. What is genuinely missing is the viewport *border*, which
+  the headless renderer does not draw — the capability now says exactly that
+  (`reason: viewport_borders_not_drawn`), and the old note's claim that
+  "viewport frames are rendered" was wrong in the other direction. Two tests
+  that pinned the false claim were corrected rather than deleted, and the
+  replacement proves the behaviour by subtraction: the sheet renders less ink
+  once the model geometry is gone.
+- **Layout names are matched case-insensitively, the way the engine underneath
+  already matched them.** ezdxf resolves layout names case-insensitively in
+  `get`, `new`, `rename`, `delete` and `set_active_layout` — but `names()`
+  returns the *stored* spelling, so every guard written as
+  `name in doc.layouts.names()` disagreed with the code it was guarding, in both
+  directions. `layout_create("SHEET")` next to an existing `Sheet` walked past
+  its own duplicate check and died on a raw `DXFValueError` from inside ezdxf;
+  `layout_set_current("SHEET")` reported "Layout not found" for a tab that was
+  right there. Both shipped in v1.4. One resolver now backs
+  create/set_current/delete/rename/copy and `viewport_list` on both engines, and
+  the current space is stored in the canonical spelling. Re-spelling a layout's
+  own name (`Sheet` → `SHEET`) is a rename onto itself rather than a collision;
+  ezdxf's `rename` refuses that outright, so it goes through a staging name.
+- **`entity_change_space` refuses an entity that lives on another sheet instead
+  of half-applying.** `move_to_layout` raises `DXFValueError` from deep inside
+  ezdxf when the entity is not in the source layout — and it raises *after* the
+  transform has already been applied, so the failed call left the line rescaled
+  and translated by a viewport it never moved through, still sitting on the
+  wrong sheet. Membership is now checked before anything is written, and the
+  refusal names the space the entity is actually in. One bad handle in a batch
+  no longer aborts the good ones.
+- **BREAKING (behavior): coordinates crossing the boundary are now WCS. They were
+  not.** DXF stores CIRCLE, ARC, LWPOLYLINE, TEXT, INSERT and a dimension's text
+  position in a per-entity frame derived from the entity's `extrusion` vector —
+  and the string "extrusion" appeared *nowhere* in this repository, so every such
+  read returned a raw attribute rather than a world coordinate. Mirroring flips
+  extrusion to `(0,0,-1)` and leaves the stored x unnegated, so after the
+  server's own `entity_mirror` across the Y axis a circle drawn at (30, 20)
+  reported `center [30.0, 20.0]` while the **same response's** `bounding_box`
+  said `min [-35, 15] / max [-25, 25]`: the payload contradicted itself by 60 mm,
+  silently, with no error anywhere. `point_from_snap` returned points on the
+  wrong side of the axis, `entity_select_smart` found the entity where it wasn't,
+  and `entity_offset` placed the new circle 60 mm away *and* grew it when asked
+  to shrink. Reads are now normalised at the single `_entity_info_dxf` funnel, so
+  all 38 call sites and every consumer of `EntityInfo.properties` are fixed with
+  them. The write paths (`entity_edit_geometry`, `entity_offset`) got the
+  matching inverse — mandatory, not cosmetic: read and write were *equally*
+  wrong, which made a read-then-write round trip an accidental no-op, and fixing
+  reads alone would have turned that no-op into a real 60 mm move.
+  - **Not touched, deliberately:** LINE, MTEXT, ELLIPSE, SPLINE and POINT carry
+    an `extrusion` attribute too and were always correct (ezdxf makes their
+    `ocs()` a pass-through); `entity_rotate` was never affected — it preserves
+    extrusion `(0,0,1)`. The trigger was `entity_mirror` and foreign DXF files.
+    A dimension's `defpoint` is DXF group code 10 and WCS already; only
+    `text_midpoint` (code 11) is in the entity frame.
+  - **Tilted planes.** An entity whose plane is not parallel to WCS XY cannot be
+    described by an xy pair — a tilted circle of radius 5.0 has a 5.0 × 3.99
+    footprint. `entity_get` reports the WCS centre plus `plane_normal` and
+    **omits** `radius` / `start_angle` / `end_angle` rather than reporting a
+    number that is not true in the frame the rest of the dict uses, and
+    `entity_edit_geometry` refuses with `capability: "ocs_tilted_plane"`,
+    pointing at `entity_move` (which transforms the whole entity and preserves
+    its plane). New capability keys `ocs_normalized` and `ocs_tilted_plane` on
+    both backends make the boundary pre-checkable via `system_capabilities`.
+  - **Named residuals** (in the `ocs_normalized` reason rather than left silent):
+    the OCS z component is not reported, HATCH boundaries are not reported at all
+    (silence, not a wrong number), and TEXT `rotation` stays in the entity frame
+    because a mirrored TEXT is mirror-imaged and no single scalar angle expresses
+    that — measured 29.999 reported against a true WCS 150.0.
+  - **COM:** ActiveX returns WCS natively for every point property *except*
+    `AcDbLWPolyline.Coordinates`, which is OCS; that one read is now translated.
+    Verified only against a fake COM object — this machine has a live AutoCAD and
+    connecting to it during development is forbidden, so the path ships
+    unit-tested, not hardware-verified. `AcDb2dPolyline` is deliberately out of
+    scope: its `Coordinates` may be 3D triples, and changing the stride on a
+    documentation reading alone would risk a path that works today.
+- **`validate_path` handed out working handles to `C:\Windows`.** Windows names
+  the same file through several anchors that compare unequal. The backslash
+  spellings were rejected, but `pathlib` normalises the *forward-slash* forms
+  into them only after `.resolve()` — so `//?/C:/Windows/win.ini` slipped past
+  the pattern check and then failed to match `C:/Windows` in the
+  system-directory loop. Proven: it returned a handle that `os.path.samefile`'d
+  the real file. Non-local anchors are now rejected in every spelling. This
+  removes no capability anyone had: the equivalent backslash paths were already
+  refused, so it only makes one policy consistent across spellings.
+- **The AutoLISP guard read drawing text as code.** The symbol denylist scanned
+  inside double-quoted literals, so an engineering server refused its own
+  vocabulary: `(setq desc "Max load 500 kg")` matched the `load` pattern and
+  `(setq layer "C:CENTER")` matched the custom-command pattern. Literals are now
+  blanked before scanning. Every known-dangerous vector still blocks, including
+  `(load "malicious.lsp")` and `(vl-catch-all-apply (quote command) ...)`, whose
+  dangerous token is outside the quotes.
+- **The command denylist matched characters, not commands.** A word-boundary
+  regex over the whole string refused `MTEXT 0,0 10,10 Do not erase this part`
+  — annotation text — while missing spellings AutoCAD accepts. SendCommand takes
+  a *macro*: segments split on newline or `;`, and only a segment's first token
+  is a verb. Matching is now verb-scoped with decorators (`_`, `.`, `-`, `'`)
+  stripped, the set gained the load/run channels it was missing (`ARX`,
+  `VBASTMT`, `VBAIDE`, `CUILOAD`, `SCR`, `SAVE`, `EXPORT`, `ETRANSMIT`, …), and
+  the refusal now names the offending verb — previously a user whose annotation
+  was refused had no way to tell why. Single-letter aliases stay out on purpose:
+  `E` is the ERASE alias but also ZOOM's Extents option, so blocking it would
+  refuse `_ZOOM\nE\n`, the canonical zoom-extents macro.
+- **README no longer claims the denylist is a security boundary.** It said
+  "blocked by default, with regression tests for known bypass patterns"; the
+  bypasses above had no tests, and no denylist over a command language that
+  loadable modules extend can be complete. It now says what the guard is — a
+  guardrail against an agent accidentally issuing `ERASE ALL` — and names the
+  actual boundaries: `ALLOWED_PATHS`, not exposing the server over the network,
+  and the typed tools. The same sentence is in the two tool docstrings, so it
+  reaches the model that calls them. *Not* changed: blocking `INSERT`/`SAVEAS`
+  as command strings while `block_insert`/`drawing_save_as` exist was flagged as
+  incoherent and is not — the policy is scoped to the free-text channel, and the
+  typed tools take validated arguments where the raw commands take file paths.
+  The reasoning is recorded in `security.py` so it is not re-opened.
+- **`config.settings.backend` was a control that controlled nothing.**
+  `_make_backend` read `os.environ["AUTOCAD_MCP_BACKEND"]` directly, so the
+  setting had no production reader at all and
+  `monkeypatch.setattr(config.settings, "backend", "ezdxf")` — which two tests
+  used — read like a safety guard while doing nothing. On a developer machine
+  with AutoCAD open that meant `auto`, i.e. attaching to the operator's live
+  unsaved drawing and creating entities in it. `Settings.backend` is now a
+  read-only property that reads the environment live, `_make_backend` goes
+  through it, and the test suite pins the headless backend for every test via an
+  autouse fixture (opt out with `@pytest.mark.live_backend`). Assigning to
+  `config.settings.backend` now raises `AttributeError` instead of silently
+  protecting nothing. `monkeypatch.setenv` — what the correct call sites already
+  used — is unaffected.
+- **A capability refusal now survives the trip to the client.** The backends
+  always knew exactly why they could not do a thing — they raise
+  `UnsupportedCapabilityError(capability, message)`, where `capability` is a key
+  of the capability map, so `system_capabilities` answers the same question
+  up-front. None of that reached anyone: `FastMCP.call_tool` rewraps a
+  non-`FastMCPError` as `ToolError(f"Error calling tool {name!r}: {e}") from e`,
+  and while the `from e` keeps the cause alive in-process (which is why
+  `cad_batch` could classify refusals), `__cause__` does not serialise. A remote
+  client got an English sentence, and telling "this backend cannot" from "your
+  arguments were wrong" meant substring-matching prose. A refusal now returns
+  `is_error: true` with
+  `{"ok": false, "kind": "unsupported", "capability", "error", "tool",
+  "backend"}` in `structured_content`, produced by one new
+  `CapabilityRefusalMiddleware` — no tool signature changed. *Not* done by
+  rebasing the exception on `FastMCPError`: that was measured and changes
+  nothing a client can observe, since neither the payload nor the error flag
+  travels with the exception class. Non-capability errors are byte-for-byte
+  unchanged. `UnsupportedCapabilityError` moved to `backends/base.py` (still
+  importable from `backends.ezdxf_backend`, and the *same* class object) so both
+  backends raise one type, and the five headless `solid_*` methods now raise it
+  instead of returning `{"ok": false}` — same payload, but `is_error` stops
+  being quietly `false` on a call that did nothing.
+- **BREAKING (behavior): `cad_batch` counted a step that declined *by value* as
+  a success.** A tool that returns `{"ok": false, ...}` rather than raising was
+  recorded `status: "ok"` and folded into `succeeded`, so a batch could report
+  `succeeded: 12` over work that never happened — the same class of lie as the
+  DWG bytes and the unverified rollback. Such a step is now `status: "error"`
+  with kind `unsupported` (when it names a capability) or `refused`, counts
+  toward `failed`, and honours `on_error` like any other failure. Batches that
+  relied on, say, a no-op `drawing_redo` passing silently will now stop or roll
+  back; that is the point. **Read-only tools are excluded on purpose**:
+  `validation_check` / `drawing_critique` / `drawing_preflight` answer
+  `{"ok": len(issues) == 0}`, so their `ok: false` means *I found something*,
+  not *I could not run* — reading the two the same way would let a read-only
+  check trigger a rollback that destroys the batch's own geometry. The
+  discriminator is the `readOnlyHint` annotation each tool already publishes.
+- **BREAKING (behavior): `drawing_audit` said "0 errors" about documents it had
+  just silently rewritten — and then threw the repairs away.** `Drawing.audit()`
+  is not a read: it fixes every fixable problem in place, so `auditor.fixes` is
+  a log of mutations already applied. The tool discarded that list entirely,
+  never marked the document dirty — so `drawing_close(save=True)` saw a "clean"
+  document, skipped the save, and the repairs it had just made were lost — and
+  rendered the errors it *did* report through `str()` on an `ErrorEntry` that
+  defines no `__str__`, i.e. as `<ezdxf.audit.ErrorEntry object at 0x...>`.
+  The tool now returns `repaired` / `fixes` / `fix_count` alongside
+  `errors` / `error_count`, both as `{code, name, message, handle}` dicts, and
+  marks the document dirty when it repaired something. **The behavioral break:
+  an audit that repairs now leaves unsaved changes, so a following
+  `drawing_close(save=True)` rewrites the file where it previously did not.**
+  That is the repair finally persisting; the tool was already annotated
+  `readOnlyHint: false` / `cost: mutate`. **Audit can delete entities** — an
+  entity whose owner handle points nowhere is removed, not patched — and with
+  the dirty flag fixed, that deletion now reaches disk on the next save where
+  before it was accidentally discarded. ezdxf reports those particular fixes
+  without the entity attached, so `handle` is `null` for them; the message names
+  the type and handle in prose. Read `fixes` before saving. On the COM backend `_AUDIT Y` likewise
+  repairs, but AutoCAD returns nothing machine-readable over `SendCommand`, so
+  the counts come back as `null` with `detail: "unavailable"` and
+  `capability: "audit_detail"` — never `0`, which would claim nothing was wrong
+  — plus the path of the `.adt` log. That backend also no longer leaves the
+  user's `AUDITCTL` permanently set to 1.
+- **BREAKING (behavior): the ezdxf backend no longer writes DXF bytes into a
+  `.dwg` name.** `drawing_save("part.dwg")` previously called `doc.saveas()`
+  and produced a file whose contents did not match its extension — AutoCAD
+  cannot open it, and nothing in the response said so. Both save paths now
+  refuse, driven by the extension, so `drawing_save_as("x.dwg", fmt="dxf")` is
+  refused too. Refusals carry a machine-readable
+  `{"ok": false, "capability": "dwg"}`, and `dwg` is now a declared capability
+  in both backends (ezdxf: unsupported; COM: native). Save as `.dxf`, or use
+  the COM backend for DWG.
+- **`drawing_open` no longer pretends it can read DWG.** ezdxf detects format
+  by content, so a DXF renamed `.dwg` (exactly what the bug above produced)
+  opened "successfully" as a document that does not exist in that format,
+  while a genuine DWG died with a raw `OSError` blaming the file rather than
+  the backend. The tool now refuses `.dwg` unless the active backend declares
+  the capability, and its parameter text no longer advertises DWG
+  unconditionally. Workflows holding files produced by the old `drawing_save`
+  bug must rename them to `.dxf`; the error message says so.
+- **`TOOL_PROFILE` was a silent no-op whenever a tool transform was attached.**
+  `_registered_tools()` read the post-transform tool list, so with a transform
+  in place it saw 2 tools instead of 131 — the lean profile computed 0
+  disabled tools and `system_about` reported a collapsed inventory. It now
+  reads the underlying registry.
+- **`ruff format --check .` failed on unmodified `main`.** Ruff 0.16 began
+  formatting Python code blocks inside Markdown, so the committed
+  `docs/superpowers/plans/2026-07-17-repository-cleanup-readme-benchmark.md`
+  started failing the format gate with no source change. Reformatted the file
+  and pinned the CI ruff version so a future release cannot re-break the gate
+  the same way.
+- `release.yml` now runs `ruff format --check .` alongside `ruff check .`,
+  matching the CI lint job — the release gate previously skipped formatting.
+
+- **Every headless diameter and radius dimension reported the wrong number, at
+  default settings.** `add_diameter_dim` / `add_radius_dim` measure to the point
+  they are given; `leader_length` is a *text placement*. Passing
+  `centre + (radius + leader)` as that point made the leader part of the
+  measurement, so a true ⌀40 bore was dimensioned **60** with the default
+  `leader_length=10`, and **108** at 34. Radius callouts were `leader_length`
+  too large the same way. This is the worst class of defect for this project —
+  a wrong number, silently, on the one part of a drawing that exists to carry
+  numbers — and it shipped in v1.4.0 and earlier. Now the size comes from
+  `radius` and `location` only places the text.
+  The live COM backend was never affected: ActiveX's `AddDimDiametric` takes
+  the two chord points and the leader length as separate arguments, so the two
+  engines had been disagreeing by `2 × leader_length` on the same call.
+  Found while building the sheet in the README's hero image, whose own bore
+  callout was wrong. Two checks added to `correctness_suite.py` (26, was 24);
+  both report `fail → pass` against v1.4.0 rather than `miss → pass`, which is
+  what distinguishes a repaired defect from new capability in that lane.
+- **A HATCH could not be measured, and the refusal listed HATCH as
+  measurable.** `entity_measure` had no HATCH branch, so a hatch fell through
+  to the generic error — whose own text named HATCH among the measurable types.
+  Whichever half was right, the pair could not both be. It now walks the
+  boundary paths and reports the area the hatch actually *fills*: outer loops
+  minus the islands inside them, 300 rather than 400 on a 20×20 square with a
+  10×10 island. Nesting depth is computed by containment rather than read off
+  the boundary flags, because DXF marks a path external or outermost and never
+  "two levels down" — and depth is exactly where AutoCAD's three island styles
+  stop agreeing. `hatch_style` comes back with the number so it can be read
+  against the drawing's own setting. On a curved edge `flatten_tolerance` is
+  not the accuracy knob it looks like: ezdxf hands boundaries over as cubic
+  Beziers, so tightening it converges on the Bezier's area, ~0.028% above the
+  circle it stands for, which is why `exact` goes False and stays False.
+- **`boundary_trace` and `entity_measure` disagreed about the same shape.**
+  The boundary tools reported an area taken from a copy of the loop flattened
+  at a fixed 0.01 sag while `entity_measure` read the stored bulges
+  analytically: 139.2177 against 139.2699 for one figure, with nothing in
+  either payload marking one as the approximation. The polyline the boundary
+  tools store carries exact bulges, so the exact answer was always available;
+  both now read it and round to the same six decimals. The flattened figure
+  survives only where it is harmless — ranking candidate loops, where a 0.01%
+  error cannot change which is smallest.
+- **A circle stored as two bulged vertices measured 0.0.** Two semicircular
+  arcs joined into a circle store as a *two*-vertex closed LWPOLYLINE with both
+  bulges 1.0 — what AutoCAD writes for a JOINed pair of arcs, and what
+  `boundary_from_entities` builds from any two-arc loop. `polygon_area_perimeter`
+  treated fewer than three vertices as degenerate and returned zero, when the
+  shoelace over two points is genuinely 0 and the two circular segments are the
+  entire shape. Only zero or one vertex bounds nothing now.
+- **The v1.4 → v1.5 performance comparison was measured, and it is not
+  flattering.** The published perf report was recorded on CPython 3.14 and the
+  new one on 3.11.15, which alone accounts for nearly all of an apparent 2–6×
+  "speedup". Re-running v1.4.0 in a worktree on the same interpreter with the
+  same suite file gives the real picture: entity creation is **28% slower**
+  (245 → 315 ms for 2,000 lines) and the 10,000-line roundtrip **22% slower**.
+  Fully attributed — `EZDXF_CALL_TIMEOUT=0` returns v1.5.0 to 244.8 ms and
+  1,679 ms, v1.4.0's numbers exactly. The whole cost is the per-call
+  `asyncio.wait_for` this release wrapped around every headless call so that
+  one hung ezdxf call can no longer wedge a server whose document lock is a
+  single `asyncio.Lock`. Deliberate trade, documented knob, and on the 1.6
+  roadmap to win back.
+
+_The five items carried into this release from 1.4 are all done: screenshot
+overlay + handle grounding, ezdxf undo/redo, COM `block_create_from_entities`,
+ISO 286 transition/interference holes, and titleblock on paper-space layouts.
+ISO 286 shafts r/s/t/u are deliberately **not** done — they need table data
+nothing here can derive, and the refusal says so rather than guessing._
+
+## [1.4.0] — 2026-07-23
+
+Release infrastructure + the roadmap features shipped together. **474 tests,
+Ruff lint- and format-clean. Tool count: 122 → 131.**
+
+### Added
+
+- **CI restored and extended** (`.github/workflows/ci.yml`): ruff lint/format,
+  Linux test matrix (3.11/3.12) with coverage, a **Windows leg** running the
+  mocked-COM suite on the platform the COM backend targets, a package job
+  (build + twine check + clean-venv wheel smoke incl. `autocad-mcp --help`),
+  a Docker build/smoke job, and MCP `server.json` schema validation.
+- **Release pipeline** (`.github/workflows/release.yml`): tag `v*` → test gate
+  → tag/version match check → build → **PyPI trusted publishing** (OIDC) →
+  GitHub Release with artifacts.
+- **MCP registry manifest** `server.json` (schema 2025-12-11, name
+  `io.github.u-c4n/autocad-mcp`, PyPI package) plus the `mcp-name` ownership
+  marker in the README and an `autocad-mcp-pro` console alias so
+  `uvx autocad-mcp-pro` works directly.
+- **Live competitor benchmark lane**: a generic black-box MCP-stdio driver
+  (`benchmarks/adapters/mcp_stdio.py`), reproducible pinned checkouts
+  (`benchmarks/competitors_env.py`), and adapters for
+  **puran-water/autocad-mcp** and **beiming183-cloud/AutoCAD-MCP** that run
+  the same 10-task matrix over stdio with harness-side DXF verification.
+  Published results (`benchmarks/results/published/`): autocad-mcp-pro
+  **100.0**, beiming183 **50.0**, puran-water **45.0**; rendered to
+  `docs/assets/autocad-mcp-livebench.svg`. Weekly/dispatch CI workflow.
+- **Tool profiles** (`TOOL_PROFILE=lean|core|full`): capability-aware
+  discovery applied in the server lifespan — `lean` is a curated ~46-tool
+  drafting core, `core` hides raw escape hatches and long-tail tools, `full`
+  (default) exposes everything. Reported by `system_about`.
+- **Paper space / layouts**: `layout_list`, `layout_create`,
+  `layout_set_current`, `viewport_create` (scaled model viewports) on both
+  backends, and `drawing_export_pdf(layout=...)` for plotting a layout.
+  Headless limitation is explicit: viewport model-content projection is
+  COM-only (`viewport_render` capability).
+- **ISO 286 limits and fits** (`engineering/fits.py`): authored table data
+  (IT4–IT11, sizes 1–500 mm; shafts d/e/f/g/h/js/k/m/n/p, holes D/E/F/G/H/JS)
+  with `fit_lookup("H7", 20.0)`; `dimension_linear/radius/diameter` gained a
+  `fit` parameter that resolves deviations from the measured nominal and
+  appends the fit code to the dimension text. Out-of-scope letters raise a
+  clear error naming the supported set.
+- **Opt-in native 3D solids** (`ENABLE_3D=true`, COM only): `solid_box`,
+  `solid_cylinder`, `solid_extrude`, `solid_revolve`, `solid_boolean`.
+  Hidden from discovery and rejected while disabled; ezdxf reports the honest
+  `solid_3d` capability boundary (ACIS cannot be generated headlessly).
+- **Release-consistency test suite** (`tests/test_release_consistency.py`):
+  pyproject ↔ version.py ↔ CHANGELOG ↔ README snapshot ↔ server.json versions,
+  README tool/resource/prompt counts vs live registrations, per-section header
+  counts vs decorators, Dockerfile COPY vs wheel `only-include`, and the
+  README `mcp-name` marker.
+
+### Changed
+
+- **pyproject metadata completed** for PyPI: SPDX license + license file,
+  authors, keywords, classifiers, project URLs.
+- **`build_dim_override`**: `deviation`/`limit` modes now pass DIMTM signed
+  (`-lower`) instead of `abs()` — double-positive ISO 286 fits (e.g. p6
+  +0.035/+0.022) render correctly; the legacy "positive magnitude = minus
+  deviation" contract is unchanged.
+- **Capability maps**: `paper_space` is now native on both backends;
+  new `viewport_render` feature (COM native / ezdxf unsupported);
+  `solid_3d` reflects the ENABLE_3D gate on COM.
+- README rebuilt around the live-run benchmark lane; CI/PyPI badges added;
+  `ruff format` applied repo-wide and enforced in CI.
+
+### Fixed
+
+- **Dockerfile shipped a broken image**: `engineering/` and `version.py` were
+  never copied, so engineering tools failed in containers. Both are now
+  copied (plus README/LICENSE for metadata) and the healthcheck imports the
+  engineering package.
+- `server.py` section-header tool counts and the CLAUDE.md inventory were
+  stale (six sections drifted); both now match the live surface and are
+  locked by tests. Removed the reference to the non-existent
+  `.claude/skills/` directory.
+
+## [1.3.0] — 2026-07-17
+
+Closed-loop quality, production annotation, and auditable delivery. **415 tests,
+Ruff lint-clean. Tool count: 116 → 122.**
+
+### Added
+
+- **`drawing_preflight`** normalizes production requirements, reports missing or
+  conflicting facts before geometry starts, and emits a deterministic SHA-256
+  spec hash that `drawing_plan` can enforce.
+- **`drawing_refine`** runs a bounded `critique → repair → re-critique` loop.
+  Each repair round is isolated in its own transaction and rolls back if score
+  regresses or hard-error count increases. Construction, duplicate, layer
+  color/lineweight, untrimmed endpoint, and dimension-overlap repairs are
+  supported; undefined GD&T datums remain explicitly manual.
+- **TABLE and MLEADER semantics** via `entity_create_table` and
+  `leader_create_mleader`: native ActiveX entities on COM and deterministic,
+  portable LINE/LWPOLYLINE/MTEXT composites on ezdxf. Composite creation
+  returns child handles and a logical ID; after DXF reopen, inspection uses the
+  persisted standard child entities rather than a native TABLE/MLEADER object.
+- **`system_capabilities`** and shared typed backend capability maps distinguish
+  native, rendered, composite, snapshot, shared, and unsupported features.
+- **`drawing_deliver`** creates DXF/PDF/PNG bundles, runs validator + critique,
+  re-opens the canonical DXF for entity/type/layer/bounds parity, hashes every
+  artifact, and writes `manifest.json` plus `validation.json`. Failed gates keep
+  artifacts for diagnosis but never report delivery success.
+- **Benchmark v2**: ten fixed vendor-neutral tasks, an adapter interface, an
+  ezdxf/COM reference adapter, cooperative per-task timeout reporting,
+  fixed-matrix coverage-aware scoring, machine-readable statuses,
+  runtime/environment/capability metadata, and artifact SHA-256.
+
+### Changed
+
+- ezdxf transaction snapshots are isolated from user-facing undo history, so a
+  refiner rollback cannot consume an unrelated undo entry.
+- Package metadata is the canonical version source used by `system_about` and
+  delivery manifests.
+- `benchmarks/correctness_suite.py` now shows usage for argless/`--help` calls
+  instead of raising a traceback.
+
+### Fixed
+- **Install from source** — `pip install -e ".[full]"` failed at
+  "Preparing editable metadata" because the flat layout has no directory
+  matching the project name, so hatchling could not infer which files to ship.
+  `pyproject.toml` now declares the wheel file selection explicitly
+  (`server.py`, `config.py`, `security.py`, `backends/`, `engineering/`). (#2)
+- **`dimension_linear` on the COM backend** — always crashed with
+  `<unknown>.AddDimLinear`: the AutoCAD ActiveX API has no `AddDimLinear`
+  method. Linear dimensions are now created via `AddDimRotated` (identical
+  argument order), with a mocked regression test. (#3)
+
+## [1.2.0] — 2026-07-07
+
+Production-ISO parity + a measurable quality moat. **360 tests, ruff-clean.** Tool count: 111 → 116.
+
+### Added
+- **`drawing_settings`** — read or change common AutoCAD drawing settings by
+  friendly name (units mm/cm/m/inch/feet, linear/angular precision, LTSCALE,
+  DIMSCALE, text size, point mode/size, OSMODE, fillet radius) without
+  memorising system-variable names. Call with no argument for a full snapshot.
+  A convenience facade over `system_get_variable` / `system_set_variable`;
+  cross-backend.
+- **In-place editing** — `entity_edit_text` re-labels or resizes an existing
+  TEXT/MTEXT entity, and `entity_edit_geometry` re-drives a CIRCLE/LINE/ARC
+  (center, radius, endpoints, arc angles) — both **preserve the entity handle**,
+  so the user can adjust a drawing without delete-and-recreate. Cross-backend.
+- **2D GD&T (ISO 1101 / ASME Y14.5)** — `gd_frame` draws a feature control frame
+  (all 14 geometric characteristics, ⌀ zone prefix, Ⓜ/Ⓛ/Ⓢ material modifiers,
+  multi-datum references) and `datum_feature` places a datum symbol. Frames are
+  composed from LINE + TEXT so they render identically on **both** the COM and
+  ezdxf backends (ezdxf's native TOLERANCE entity renders blank via matplotlib).
+  No competing CAD MCP or surveyed text-to-CAD product ships 2D GD&T authoring.
+- **GD&T datum-consistency gate** — a new `gdt` critique focus fails
+  `drawing_finalize` when a feature control frame references a datum with no
+  matching datum feature (a meaningless FCF per ISO 1101).
+- **ISO 129 dimension tolerances** — `dimension_linear` / `dimension_radius` /
+  `dimension_diameter` gain `tol_upper` / `tol_lower` / `tol_mode`
+  (`symmetric` ±, `deviation` +a/-b, `limit` stacked, `basic` boxed) and a
+  `text_override` (e.g. `⌀20 H7`). Toleranced production dimensions are now
+  possible — previously the single biggest functional gap.
+- **Scalar drawing-score + invalidity ratio** (`engineering/scoring.py`) — the
+  `drawing_finalize` payload now carries a 0-100 `score`, an `invalidity_ratio`,
+  and an A-F `grade` over the union of the structural validator and the premium
+  critique, so drawing quality is regression-trackable (MUSE / CadBench grade an
+  Invalidity Ratio, not shape).
+
+### Fixed
+- **Honesty**: the COM backend advertised a false `all_entity_types` capability
+  (it authors 2D entities only, no 3D solids) — corrected to `entities_2d`.
+
+## [1.1.1] — 2026-06-20
+
+### Added
+- **`selection_get`** (Entity Query, COM backend): reads AutoCAD's implied
+  ("pickfirst") viewport selection — the entities the user highlighted with
+  grips before invoking the AI — and returns their handles + `EntityInfo`.
+  This lets the AI scope work to exactly what the user picked
+  (`dimension_auto(selection_get()["handles"])`) instead of acting on the whole
+  drawing. Resolves [#1](https://github.com/U-C4N/Autocad-MCP/issues/1) — the
+  layer-juggling workaround is no longer needed. Surfaces the `PICKFIRST` sysvar
+  state so an empty selection is self-explanatory. The ezdxf headless backend
+  has no viewport, so it returns `ok=False` with an empty handle list (same
+  shape, never raises). Tool count: 110 → 111.
+
+## [1.1.0] — 2026-06-19
+
+Correctness, cross-backend parity, and an **enforced** quality gate, landed across four audited
+sprints (see `docs/analysis/`). 318 tests, ruff-clean.
+
+### Added
+- **Premium drafting workflow** (shared across both backends): `drawing_plan`, `drawing_critique`
+  (ISO-128 focuses), `point_from_snap`, `drawing_apply_iso_layers`, `dimension_auto`,
+  `entity_select_smart`, `construction_xline` / `construction_clear`.
+- **Deterministic geometry** for exact OSNAP coordinates: `point_intersection`
+  (line/line, line/circle, circle/circle) and `point_tangent` (external point → circle).
+- **Engineering / deterministic CAD layer**: involute gear front view + section A-A,
+  DIN 6885 keyed bore, ISO A3 title block, and the 8-step `drawing_finalize` validator.
+- **HTTP bearer-token auth**: `StaticTokenVerifier` wired into FastMCP when `MCP_AUTH_TOKEN` is set.
+- Mocked-COM test harness (`tests/test_com_backend.py` + Sprint-3/4 suites) — COM logic is now
+  regression-tested on Linux CI without a live AutoCAD.
+- `entity_create_mtext` rotation parameter; `dimension_auto` layer override; `bounding_box` /
+  ARC `length` / TEXT-MTEXT `rotation`+`char_height` on both backends; `BlockInfo.description`.
+- Security module (`security.py`), centralized config (`config.py`), `.env.example`, path
+  validation, command/LISP sanitization, ruff config, pre-commit hooks, pytest-cov.
+
+### Changed
+- **`drawing_finalize` now enforces the premium critique** in addition to the structural validator:
+  leftover construction geometry, non-ISO-128 lineweights, untrimmed corners, duplicate entities,
+  and dimension overlap block the gate (was advisory-only). `strict_critique=True` fails on warnings too.
+- **`drawing_save_as` derives the on-disk format from the file extension** — `part.dxf` writes DXF,
+  not DWG. ezdxf refuses to mislabel a `.dwg` file.
+- Dimension and construction layers resolve from the active layer set (iso13567 → `M-DIMEN-T-N` /
+  `M-CONST-E-N`, not the hardcoded `DIM` / `CONSTRUCTION`).
+- Premium meta-tools lifted into the shared `AutoCADBackend` base class (single source of truth).
+- Dead code removed (`section.py`, `generate_tooth_profile`, `CommandResult`, `set_layer_active`, …).
+
+### Fixed
+- ezdxf `dimension_aligned` / `dimension_angular` raised `TypeError` (wrong ezdxf 1.4 args) — fixed.
+- Full-circle polar array placed a duplicate copy over the original — fixed (divisor = count).
+- `entity_offset` ignored `side_x`/`side_y` on both backends — now honored (and COM no longer leaks extras).
+- COM `entity_create_hatch` built an associative hatch then deleted its boundary — now non-associative.
+- Lineweight mm-vs-hundredths truncation wiped ISO-128 weights — fixed via `normalize_lineweight`.
+- **`view_screenshot` / `drawing_export_pdf` could SIGSEGV** (matplotlib GUI backend in a worker thread)
+  — now render headless via `Agg` (`Figure` + `FigureCanvasAgg`).
+- `entity_select_smart` `length_range` silently rejected all ARCs (no `length`) — fixed.
+- Gear tooth profile self-overlapped for high tooth counts (z ≥ ~42); section view drew duplicate
+  bore lines; validator keyway heuristic was a permanent false-negative — all fixed.
+- COM `system_run_lisp` always reported `"nil"`; `system_set_variable` didn't coerce numeric sysvars
+  — fixed. `system_about` tool groups / `_registered_tool_count` no longer drift or surface `-1`.
+- `drawing_new` bootstrap failures now surface as `degraded` instead of reporting success.
+
+### Security
+- HTTP remote-bind guard now fires on **every** launch path (including `fastmcp run server.py:mcp`),
+  not only the `__main__` block — closing an anonymous-remote-bind gap.
+- AutoLISP allowlist bypass-vector regression tests (newline injection, symbol aliasing, `vla*`/`acet-*`,
+  `c:` custom commands).
+- COM apartment leak bounded (`CoUninitialize` on teardown); transaction commit/rollback and
+  `system_run_lisp` now respect the CMDACTIVE guard.
+
+## [1.0.0] — 2026-03-01
+
+### Added
+- Initial release with 67 tools, 6 resources, 5 prompt templates
+- Dual-engine architecture: COM backend (live AutoCAD) + ezdxf backend (headless)
+- FastMCP 3.0 server with middleware stack (error handling, audit, timing, logging)
+- Drawing management: new, open, save, save-as, export DXF/PDF, purge, audit, undo/redo
+- Entity creation: line, circle, arc, polyline, rectangle, text, mtext, hatch, spline, ellipse, point, block reference
+- Dimensions: linear, aligned, angular, radius, diameter
+- Entity modification: move, copy, rotate, scale, mirror, offset, delete, rectangular/polar array
+- Layer management: create, delete, set current, modify, freeze/thaw, lock/unlock, hide/show, isolate
+- Block operations: list, insert, explode, attributes, create from entities, find references
+- Analysis: entity stats, region search, distance/area measurement, bounding box, select by layer/type
+- View control: zoom extents/window, screenshot
+- Transaction support: begin, commit, rollback
+- System tools: status, variables, command execution, AutoLISP evaluation
+- 5 prompt templates: floor plan, P&ID, electrical schematic, mechanical drawing, quick drawing

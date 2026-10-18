@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Testing and tooling
+.pytest_cache/
+.ruff_cache/
+.codex-pytest-temp/
+.release-*/
+.tdd-*/
+.coverage
+coverage.xml
+htmlcov/
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Generated CAD and benchmark output
+out/
+benchmarks/results/*
+!benchmarks/results/.gitkeep
+!benchmarks/results/published
+!benchmarks/results/published/**
+benchmarks/.competitors/
+*.dxf
+# The bundled templates are the one committed DXF set: built by
+# scripts/build_templates.py and pinned reproducible by its --check.
+!templates/*.dxf
+*.dwg
+*.bak
+
+# Local editor/agent state
+.cursor/
+
+# NOTE: uv.lock is deliberately *not* ignored. It used to be — back when the
+# committed one was stale and unvetted — but CI now installs from it with
+# `uv sync --locked`, so ignoring it would silently disarm every locked lane.
+# Regenerate with `uv lock` whenever pyproject.toml dependencies change.
+
+# AutoCAD writes its plot-and-publish log into the cwd of the plotting process
+# (scripts/smoke_settings_com.py plots from the repo root).
+plot.log

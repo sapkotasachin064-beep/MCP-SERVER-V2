@@ -1,0 +1,115 @@
+name: Release
+
+# Tag-driven release: run the test gate, build, publish to PyPI, then cut the
+# GitHub Release with the built artifacts attached.
+#
+# Auth: the PYPI_API_TOKEN repository secret (an API token from
+# https://pypi.org/manage/account/token/). Once the project exists on PyPI,
+# prefer replacing it with a project-scoped token — or switch back to trusted
+# publishing (OIDC) by restoring `environment: pypi` + `id-token: write` and
+# registering the publisher on PyPI.
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  # Keep in step with ci.yml; both read the same uv.lock.
+  LOCKED_UV_VERSION: "0.12.1"
+
+jobs:
+  test:
+    # The same three lanes as ci.yml, not one. This job was a single
+    # ubuntu/3.11 run, so a Windows-only defect could reach PyPI without any
+    # Windows job having executed -- which is not hypothetical: v1.5.0 shipped
+    # with `except pywintypes.com_error` raising NameError wherever pywin32 is
+    # absent, and only the Linux legs of ci.yml caught it.
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - os: ubuntu-latest
+            python-version: "3.11"
+            extra: pdf
+          - os: ubuntu-latest
+            python-version: "3.12"
+            extra: pdf
+          - os: windows-latest
+            python-version: "3.11"
+            extra: full
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        id: python
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install "uv==${{ env.LOCKED_UV_VERSION }}"
+      - name: Install the locked environment
+        # `--locked` refuses to re-resolve, so the artifact that goes to PyPI is
+        # gated by the exact dependency set the suite was run against — not by
+        # whatever the index happens to serve at tag time. ruff's version comes
+        # from [dependency-groups] dev via the lock; it is not restated here.
+        run: uv sync --locked --extra ${{ matrix.extra }} --python "${{ steps.python.outputs.python-path }}"
+      - run: uv run --no-sync ruff check .
+      - run: uv run --no-sync ruff format --check .
+      - run: uv run --no-sync pytest -q
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Verify tag matches package version
+        run: |
+          pip install tomli-w 2>/dev/null || true
+          PKG_VERSION=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          TAG_VERSION="${GITHUB_REF_NAME#v}"
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match pyproject version $PKG_VERSION" >&2
+            exit 1
+          fi
+      - name: Build distributions
+        run: |
+          pip install build twine
+          python -m build
+          twine check dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+
+  github-release:
+    needs: publish-pypi
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

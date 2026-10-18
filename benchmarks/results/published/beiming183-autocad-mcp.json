@@ -1,0 +1,191 @@
+{
+  "adapter": "beiming183-autocad-mcp",
+  "adapter_metadata": {
+    "backend": "ezdxf",
+    "kind": "mcp-stdio-blackbox",
+    "pinned_sha": "11f7c47e5038796a20451b38b23032e625b5aa26",
+    "repo": "https://github.com/beiming183-cloud/AutoCAD-MCP.git",
+    "tools_discovered": [
+      "annotation",
+      "block",
+      "drawing",
+      "entity",
+      "job",
+      "layer",
+      "pid",
+      "product",
+      "solid",
+      "system",
+      "transaction",
+      "view"
+    ]
+  },
+  "environment": {
+    "implementation": "CPython",
+    "machine": "AMD64",
+    "platform": "Windows-11-10.0.26200-SP0",
+    "python": "3.14.0"
+  },
+  "generated_at": "2026-07-23T11:38:36.969519+00:00",
+  "git_sha": "4a2e9d658f051cb756f92cb8fae945c64b8cc7d4",
+  "results": [
+    {
+      "artifacts": [
+        {
+          "filename": "beiming_core_geometry.dxf",
+          "sha256": "d972b29da994b1ea8f3887eef84f2ed892a486409385b56cd444b1fe9794e337",
+          "size_bytes": 18587
+        }
+      ],
+      "duration_ms": 96.24,
+      "message": "",
+      "metrics": {
+        "circles": 1,
+        "line_length": 5.0,
+        "lines": 1
+      },
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "core_geometry"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "beiming_modify_query.dxf",
+          "sha256": "298534d8512ce62833551ab6e54c0c2a0baf18bdf7a96bd956cdf06280fb4fb8",
+          "size_bytes": 18473
+        }
+      ],
+      "duration_ms": 108.09,
+      "message": "",
+      "metrics": {},
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "modify_query"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "beiming_layers.dxf",
+          "sha256": "b401e145e97aca7011d03097190b3d0ece0a89b47d38022a81c6c4c7e250ed3d",
+          "size_bytes": 19887
+        }
+      ],
+      "duration_ms": 69.86,
+      "message": "",
+      "metrics": {},
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "layers_linetypes"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "beiming_dimensions.dxf",
+          "sha256": "8996d2ba42da66f46e79d1655405a4bf2ba72301861eeea58509cba44c408fb4",
+          "size_bytes": 20972
+        }
+      ],
+      "duration_ms": 75.55,
+      "message": "",
+      "metrics": {
+        "dimension_count": 1
+      },
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "dimensions"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.12,
+      "message": "no TABLE or MLEADER operation in the annotation tool (v3.10)",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "table_mleader"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 18.99,
+      "message": "transaction begin is rejected as unsupported on the headless backend",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "transactions"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.04,
+      "message": "no requirements-preflight equivalent",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "preflight"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.02,
+      "message": "audits detect issues but there is no automated repair loop",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "quality_refiner"
+    },
+    {
+      "artifacts": [
+        {
+          "filename": "beiming_roundtrip.dxf",
+          "sha256": "79d7bdc1e66e506dd2ecf66fbf030839242c77870021ccbfe3c819ad394695ce",
+          "size_bytes": 18474
+        }
+      ],
+      "duration_ms": 69.95,
+      "message": "",
+      "metrics": {
+        "entity_count": 1
+      },
+      "score": 100.0,
+      "status": "pass",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "dxf_roundtrip"
+    },
+    {
+      "artifacts": [],
+      "duration_ms": 0.06,
+      "message": "drawing.deliver is documented as File-IPC only (not headless)",
+      "metrics": {},
+      "score": 0.0,
+      "status": "unsupported",
+      "stderr_summary": "",
+      "stdout_summary": "",
+      "task_id": "auditable_delivery"
+    }
+  ],
+  "schema_version": "2.0",
+  "summary": {
+    "attempted": 10,
+    "coverage_percent": 50.0,
+    "passed": 5,
+    "score": 50.0,
+    "supported": 5,
+    "unsupported": 5
+  },
+  "timeout_seconds": 30.0
+}

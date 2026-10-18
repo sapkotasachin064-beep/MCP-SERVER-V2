@@ -11,7 +11,14 @@ import copy
 
 import pytest
 
-from engineering.arch.completeness import check, grid_misalignment
+from engineering.arch.completeness import (
+    check,
+    column_clashes,
+    duplicate_walls,
+    grid_misalignment,
+    opening_swing_clashes,
+)
+from engineering.arch.model import Opening, Wall
 from engineering.arch.spec import EXAMPLE_SPEC, draw_plan_from_spec, validate_spec
 
 
@@ -211,6 +218,195 @@ async def test_a_real_run_carries_the_same_completeness_list(backend):
 
 
 # -- the registered tool ------------------------------------------------------------
+
+
+# -- duplicate / overlapping walls ---------------------------------------------
+
+
+def test_duplicate_overlapping_walls_are_flagged():
+    a = Wall(id="A", axis=((0, 0), (3000, 0)), thickness=200)
+    b = Wall(id="B", axis=((500, 0), (2500, 0)), thickness=200)
+    rows = duplicate_walls([a, b])
+    assert rows and set(rows[0]["walls"]) == {"A", "B"}
+    assert rows[0]["overlap_mm"] == pytest.approx(2000.0, abs=1.0)
+
+
+def test_walls_meeting_end_to_end_are_not_duplicates():
+    a = Wall(id="A", axis=((0, 0), (1000, 0)), thickness=200)
+    b = Wall(id="B", axis=((1000, 0), (1000, 1000)), thickness=200)
+    assert duplicate_walls([a, b]) == []
+
+
+def test_check_reports_duplicate_walls_given_a_norm_built_without_the_wall_engine():
+    # validate_spec itself already refuses this through the wall engine's own
+    # junction-angle check (a 0-degree "corner" cannot be resolved) before a
+    # document ever reaches completeness.check - a blunter, earlier refusal.
+    # arch_duplicate_wall exists for a `norm` assembled another way; built
+    # directly here the same way `check()`'s other pure helpers are tested.
+    a = Wall(id="A", axis=((0, 0), (3000, 0)), thickness=200)
+    b = Wall(id="B", axis=((500, 0), (2500, 0)), thickness=200)
+    norm = {
+        "walls": [a, b],
+        "openings": [],
+        "poche": True,
+        "rooms": [],
+        "fixtures": [],
+        "chains": ("bottom", "left"),
+        "sheet": {"intent": "duplicate-wall probe"},
+        "requires_stair": False,
+    }
+    issues = check(norm)
+    assert any(i["rule"] == "arch_duplicate_wall" and i["severity"] == "error" for i in issues)
+
+
+# -- door swing clashes -------------------------------------------------------------
+
+
+def test_a_door_swinging_into_a_facing_wall_is_flagged():
+    host = Wall(id="EXT1", axis=((0, 0), (2000, 0)), thickness=100)
+    facing = Wall(id="FACING", axis=((0, 500), (2000, 500)), thickness=100)
+    door = Opening(
+        id="D1", wall="EXT1", kind="door", offset=500, width=900, swing="in", hand="left"
+    )
+    rows = opening_swing_clashes([host, facing], [door])
+    assert rows and rows[0]["opening"] == "D1" and "FACING" in rows[0]["clashes"]
+
+
+def test_a_door_with_room_to_swing_is_not_flagged():
+    host = Wall(id="EXT1", axis=((0, 0), (2000, 0)), thickness=100)
+    facing = Wall(id="FACING", axis=((0, 2000), (2000, 2000)), thickness=100)
+    door = Opening(
+        id="D1", wall="EXT1", kind="door", offset=500, width=900, swing="in", hand="left"
+    )
+    assert opening_swing_clashes([host, facing], [door]) == []
+
+
+# -- candidate-column / opening coordination -----------------------------------------
+
+
+def test_a_grid_intersection_inside_an_opening_span_is_flagged():
+    wall = Wall(id="EXT", axis=((0, 0), (4000, 0)), thickness=200)
+    door = Opening(id="D1", wall="EXT", kind="door", offset=1000, width=1000)
+    rows = column_clashes([wall], [door], [1500], [0])
+    assert rows and rows[0]["wall"] == "EXT" and rows[0]["opening"] == "D1"
+
+
+def test_a_grid_intersection_clear_of_any_opening_is_not_flagged():
+    wall = Wall(id="EXT", axis=((0, 0), (4000, 0)), thickness=200)
+    door = Opening(id="D1", wall="EXT", kind="door", offset=1000, width=1000)
+    assert column_clashes([wall], [door], [3800], [0]) == []
+
+
+def test_check_adds_column_clashes_only_when_grid_columns_is_requested():
+    spec = _spec()
+    norm = validate_spec(spec)
+    # D1 is EXT.offset=1000..2000; a grid line through it with columns=True clashes.
+    with_columns = check(norm, grid={"x_axes": [1500], "y_axes": [0], "columns": True})
+    without_columns = check(norm, grid={"x_axes": [1500], "y_axes": [0]})
+    assert any(i["rule"] == "arch_column_clash" for i in with_columns)
+    assert not any(i["rule"] == "arch_column_clash" for i in without_columns)
+
+
+# -- requires_stair -----------------------------------------------------------------
+
+
+def test_requires_stair_true_with_no_stair_is_an_error():
+    spec = _spec(stairs=[], requires_stair=True)
+    norm = validate_spec(spec)
+    issues = check(norm)
+    assert any(i["rule"] == "arch_missing_stair" and i["severity"] == "error" for i in issues)
+
+
+def test_requires_stair_true_with_a_stair_is_not_flagged():
+    norm = validate_spec(_spec(requires_stair=True))
+    issues = check(norm)
+    assert not any(i["rule"] == "arch_missing_stair" for i in issues)
+
+
+def test_requires_stair_defaults_false_and_is_not_flagged():
+    norm = validate_spec(_spec(stairs=[]))
+    issues = check(norm)
+    assert not any(i["rule"] == "arch_missing_stair" for i in issues)
+
+
+# -- duplicate room numbers ----------------------------------------------------------
+
+
+def test_a_repeated_room_number_is_flagged():
+    spec = _spec()
+    spec["rooms"][1]["number"] = spec["rooms"][0]["number"]
+    norm = validate_spec(spec)
+    issues = check(norm)
+    rows = [i for i in issues if i["rule"] == "arch_duplicate_room_number"]
+    assert rows and set(rows[0]["rooms"]) == {"R1", "R2"}
+    assert rows[0]["manual_review_required"] is False
+
+
+# -- circulation reachability ---------------------------------------------------------
+
+
+def test_a_room_reachable_only_through_other_rooms_with_no_exterior_door_is_unreachable():
+    spec = {
+        "walls": [
+            {
+                "id": "EXT1",
+                "axis": [[0, 0], [3000, 0], [3000, 3000], [0, 3000]],
+                "thickness": 200,
+                "closed": True,
+            },
+            {
+                "id": "EXT2",
+                "axis": [[10000, 0], [16000, 0], [16000, 3000], [10000, 3000]],
+                "thickness": 200,
+                "closed": True,
+            },
+            {"id": "INT2", "axis": [[13000, 0], [13000, 3000]], "thickness": 100},
+        ],
+        "openings": [
+            {"id": "D1", "wall": "EXT1", "kind": "door", "offset": 1000, "width": 900},
+            {"id": "D2", "wall": "INT2", "kind": "door", "offset": 1200, "width": 900},
+        ],
+        "rooms": [
+            {"id": "R1", "name": "A", "number": "01", "at": [1500, 1500]},
+            {"id": "R2", "name": "B", "number": "02", "at": [11500, 1500]},
+            {"id": "R3", "name": "C", "number": "03", "at": [14500, 1500]},
+        ],
+    }
+    norm = validate_spec(spec)
+    issues = check(norm)
+    unreachable = {i["room"] for i in issues if i["rule"] == "arch_room_unreachable"}
+    assert unreachable == {"R2", "R3"}
+    assert not any(i["rule"] == "arch_room_no_door" for i in issues)
+
+
+# -- informational findings ----------------------------------------------------------
+
+
+def test_missing_chains_is_an_info_recommendation():
+    spec = _spec()
+    del spec["chains"]
+    norm = validate_spec(spec)
+    issues = check(norm)
+    rows = [i for i in issues if i["rule"] == "arch_no_dimension_chains"]
+    assert rows and rows[0]["severity"] == "info" and rows[0]["manual_review_required"] is False
+
+
+def test_default_sheet_intent_is_an_info_recommendation():
+    spec = _spec(sheet={"sheet_size": "A3", "scale": 50})
+    norm = validate_spec(spec)
+    issues = check(norm)
+    rows = [i for i in issues if i["rule"] == "arch_sheet_intent_default"]
+    assert rows and rows[0]["severity"] == "info"
+
+
+def test_every_issue_carries_resolved_and_manual_review_fields():
+    spec = _spec(openings=[o for o in EXAMPLE_SPEC["openings"] if o["kind"] != "door"])
+    norm = validate_spec(spec)
+    issues = check(norm)
+    assert issues
+    for issue in issues:
+        assert issue["resolved"] is False
+        assert isinstance(issue["manual_review_required"], bool)
 
 
 @pytest.mark.asyncio

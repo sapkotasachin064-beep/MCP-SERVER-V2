@@ -37,6 +37,14 @@ ARCH_LAYERS: list[tuple[str, int, str, float, str]] = [
     ("A-SYMB-T-N", 7, "Continuous", 0.25, "Architecture / symbols and marks / new"),
     ("A-OVHD-E-N", 3, "HIDDEN", 0.18, "Architecture / overhead, above the cut plane / new"),
     ("A-CONST-E-N", 250, "Continuous", 0.05, "Architecture / construction (scratch)"),
+    (
+        "S-COLS-E-N",
+        6,
+        "Continuous",
+        0.25,
+        "Structural / candidate column markers at grid intersections, "
+        "unsized / new - coordination only, never a structural design",
+    ),
 ]
 
 #: Architectural role -> layer. ``wall_hatch`` is where a ``HatchArea`` lands
@@ -54,6 +62,7 @@ ARCH_ROLE_LAYER: dict[str, str] = {
     "dim": "A-DIMEN-T-N",
     "symbol": "A-SYMB-T-N",
     "overhead": "A-OVHD-E-N",
+    "column": "S-COLS-E-N",
 }
 
 #: The two roles ``engineering/layers.py::resolve_role_layer`` answers for.

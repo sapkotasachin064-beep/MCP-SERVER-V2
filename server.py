@@ -10443,6 +10443,18 @@ async def arch_grid(
             description="Plot-scale denominator (50 = 1:50): bubbles and labels are paper mm x scale",
         ),
     ] = 50.0,
+    columns: Annotated[
+        bool,
+        Field(
+            default=False,
+            description=(
+                "Also mark a candidate column at every axis intersection: an unsized "
+                "square-and-cross on its own S-COLS-E-N layer, never a column's real size - "
+                "coordination only. Pair with arch_plan_from_spec(grid={'columns': True, ...}) "
+                "to flag one that lands inside a door or window's clear span."
+            ),
+        ),
+    ] = False,
     ctx: Context = None,
 ) -> dict:
     """Axis lines on the arch grid layer (its CENTER linetype comes from the layer) and a
@@ -10461,7 +10473,13 @@ async def arch_grid(
     await ctx.info(f"arch grid: {len(x_axes)} x {len(y_axes)} axes at 1:{scale:g}")
     try:
         return await draw_grid(
-            _backend(ctx), x_axes, y_axes, labels=labels, extension=extension, scale=scale
+            _backend(ctx),
+            x_axes,
+            y_axes,
+            labels=labels,
+            extension=extension,
+            scale=scale,
+            columns=columns,
         )
     except ValueError as exc:
         raise ToolError(str(exc)) from exc

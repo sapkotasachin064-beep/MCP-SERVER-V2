@@ -59,6 +59,7 @@ SPEC_KEYS = (
     "chains",
     "schedules",
     "fixtures",
+    "requires_stair",
 )
 SHEET_KEYS = ("intent", "sheet_size", "scale")
 CHAIN_SIDES = ("bottom", "top", "left", "right")
@@ -188,8 +189,11 @@ def validate_spec(spec: dict) -> dict:
     """The whole document checked and normalised - nothing is drawn here.
 
     Returns ``{"sheet", "lang", "scale", "poche", "walls", "openings",
-    "stairs", "rooms", "chains", "schedules"}`` with model objects in place of
-    dicts (rooms stay dicts: ``label_room`` takes the request, not a Room).
+    "stairs", "rooms", "chains", "schedules", "requires_stair"}`` with model
+    objects in place of dicts (rooms stay dicts: ``label_room`` takes the
+    request, not a Room). ``requires_stair`` (default ``False``) is a caller
+    declaration, not a derived fact: when true and ``stairs`` is empty,
+    ``completeness.check`` raises ``arch_missing_stair`` as an error.
     """
     from engineering.arch.stairs import stair_prims
     from engineering.arch.walls import wall_geometry
@@ -216,6 +220,9 @@ def validate_spec(spec: dict) -> dict:
     poche = spec.get("poche", True)
     if not isinstance(poche, bool):
         raise ValueError(f"poche: expected true or false, got {poche!r}")
+    requires_stair = spec.get("requires_stair", False)
+    if not isinstance(requires_stair, bool):
+        raise ValueError(f"requires_stair: expected true or false, got {requires_stair!r}")
 
     raw_walls = _list(spec, "walls")
     if not raw_walls:
@@ -317,6 +324,7 @@ def validate_spec(spec: dict) -> dict:
         "chains": sides,
         "schedules": schedules,
         "fixtures": fixtures,
+        "requires_stair": requires_stair,
     }
 
 

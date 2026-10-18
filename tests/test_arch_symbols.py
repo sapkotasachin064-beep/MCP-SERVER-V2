@@ -15,10 +15,12 @@ from engineering.arch.lang import vocab
 from engineering.arch.layers import ARCH_LAYERS, ARCH_ROLE_LAYER
 from engineering.arch.symbols import (
     SYMBOL_KINDS,
+    column_prims,
     draw_grid,
     draw_symbol,
     fmt_level,
     grid_axes,
+    grid_intersections,
     grid_prims,
     symbol_prims,
 )
@@ -155,6 +157,23 @@ def test_grid_refusals_name_their_path():
 
 
 # -- the north arrow -------------------------------------------------------------
+
+
+def test_grid_intersections_cover_every_x_by_y_pair():
+    items = grid_intersections([0.0, 5000.0, 9000.0], [0.0, 6000.0])
+    assert len(items) == 6
+    ats = {item["at"] for item in items}
+    assert ats == {(x, y) for x in (0.0, 5000.0, 9000.0) for y in (0.0, 6000.0)}
+    labels = {item["label"] for item in items}
+    assert labels == {"1/A", "2/A", "3/A", "1/B", "2/B", "3/B"}
+
+
+def test_column_prims_place_one_marker_per_intersection():
+    prims = column_prims([0.0, 9000.0], [0.0, 6000.0], scale=50)
+    assert {p.role for p in prims} == {"column"}
+    # one Poly (square) and two Line (the cross) per intersection, 4 intersections
+    assert sum(1 for p in prims if isinstance(p, Poly)) == 4
+    assert sum(1 for p in prims if isinstance(p, Line)) == 8
 
 
 def test_north_arrow_points_up_at_zero_rotation():
@@ -338,6 +357,25 @@ async def test_draw_grid_puts_axes_on_the_grid_layer_and_bubbles_on_symbols(back
     row = next(row for row in ARCH_LAYERS if row[0] == grid_layer)
     info = next(info for info in await backend.layer_list() if info.name == grid_layer)
     assert info.linetype.upper() == row[2].upper()
+
+
+@pytest.mark.asyncio
+async def test_draw_grid_columns_true_also_marks_every_intersection(backend):
+    result = await draw_grid(backend, [0.0, 6000.0], [0.0, 4500.0], scale=50, columns=True)
+    assert result["ok"] is True
+    assert len(result["columns"]) == 4
+    column_layer = ARCH_ROLE_LAYER["column"]
+    assert column_layer in result["layers"]
+    polys = await backend.entity_list(type_filter="LWPOLYLINE", limit=100)
+    on_column_layer = [e for e in polys if e.layer == column_layer]
+    assert len(on_column_layer) == 4
+
+
+@pytest.mark.asyncio
+async def test_draw_grid_without_columns_draws_no_column_layer(backend):
+    result = await draw_grid(backend, [0.0, 6000.0], [0.0, 4500.0], scale=50)
+    assert "columns" not in result
+    assert ARCH_ROLE_LAYER["column"] not in result["layers"]
 
 
 @pytest.mark.asyncio

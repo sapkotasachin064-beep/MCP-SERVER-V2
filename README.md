@@ -19,7 +19,7 @@ Live through COM on Windows, or headless through ezdxf anywhere — one typed co
 
 </div>
 
-> **v1.6 release snapshot:** 247 tools · 8 resources · 5 prompt templates · 5013 collected tests.
+> **v1.6 release snapshot:** 247 tools · 8 resources · 5 prompt templates · 5040 collected tests.
 > 247 is the **registered** count; a default install advertises 242 over `tools/list`,
 > because `ENABLE_3D` is unset. `system_about` is the runtime authority.
 
@@ -46,6 +46,14 @@ Five tracks of one [roadmap](https://github.com/U-C4N/Autocad-MCP/blob/main/docs
 <img src="https://raw.githubusercontent.com/U-C4N/Autocad-MCP/main/docs/assets/arch-showcase.png" alt="Two-room floor plan: hatched brick walls with an aerated-concrete partition, two doors, two windows, a straight stair, room labels with measured areas, exterior dimension chains, and door, window and room schedules" width="800">
 
 <sub><b>A floor plan whose areas nobody typed.</b> <code>arch_plan_from_spec</code>'s example, drawn in one transaction: a 250 mm brick ring split by a 100 mm AAC wall, two doors, two windows, a straight stair and exterior dimension chains at 1:50. The rooms measure 27.74 and 21.99 m², read from the faces the walls enclose, and the door, window and room schedules are read off the drawing. <code>drawing_critique(focus=None)</code> returns <b>0 issues</b>. Rebuild it with <code>python scripts/render_readme_arch.py</code>.</sub>
+
+<img src="https://raw.githubusercontent.com/sapkotasachin064-beep/MCP-SERVER-V2/main/docs/assets/residential-ground-floor.png" alt="Ground floor of a two-storey residential test plan: living/dining, kitchen, a shared bathroom and a U-shaped stair hall behind a 230 mm brick envelope, with door, window and room schedules and exterior dimension chains" width="800">
+
+<sub><b>A two-storey house, floor by floor.</b> A 40x30 ft plot (5/3/3 ft front/side/rear setbacks, a test-fixture assumption), drawn with the new <code>requires_stair</code>, <code>arch_room_unreachable</code> and candidate-column (<code>arch_grid(columns=True)</code>) completeness checks in place. Ground floor: living/dining, kitchen, one shared bathroom, a U-shaped stair hall. 62.02 m² net, 0 validator errors. Rebuild it with <code>python scripts/residential_house_example.py --out &lt;folder&gt;</code>.</sub>
+
+<img src="https://raw.githubusercontent.com/sapkotasachin064-beep/MCP-SERVER-V2/main/docs/assets/residential-first-floor.png" alt="First floor of the same residential test plan: four bedrooms and two bathrooms around a stair landing in the same plan position as the ground floor, with door, window and room schedules" width="800">
+
+<sub><b>The same stair, two floors.</b> First floor: four bedrooms and two bathrooms around the stair landing, kept at the same plan position as the ground floor by hand - this repository has no storey-link concept, so <code>arch_room_unreachable</code> fires on every room here by design (a stair down is not a connection it can see, not a defect). 60.60 m² net, 0 validator errors.</sub>
 
 <img src="https://raw.githubusercontent.com/U-C4N/Autocad-MCP/main/docs/assets/pid-showcase.png" alt="P&ID sheet: a centrifugal pump, a diaphragm-actuated globe control valve, a vertical vessel with two nozzles, a flow controller bubble and an off-page connector, joined by numbered process lines and an electric signal line" width="800">
 

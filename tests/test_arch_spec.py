@@ -93,6 +93,19 @@ def test_validate_spec_turns_dicts_into_the_model():
     assert norm["scale"] == 50.0 and norm["lang"] == "en"
     assert norm["chains"] == ("bottom", "left")
     assert [s["kind"] for s in norm["schedules"]] == ["doors", "windows", "rooms"]
+    assert norm["requires_stair"] is False
+
+
+def test_requires_stair_defaults_false_and_round_trips_true():
+    spec = _spec(requires_stair=True)
+    norm = validate_spec(spec)
+    assert norm["requires_stair"] is True
+
+
+def test_requires_stair_rejects_a_non_bool():
+    spec = _spec(requires_stair="yes")
+    with pytest.raises(ValueError, match=r"^requires_stair: expected true or false"):
+        validate_spec(spec)
 
 
 # -- the whole plan --------------------------------------------------------------

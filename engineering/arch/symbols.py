@@ -198,6 +198,61 @@ def grid_prims(
     return tuple(prims)
 
 
+# -- candidate columns at grid intersections -----------------------------------
+
+#: Candidate-column marker size, paper mm times `scale` - this module's own
+#: drafting choice, like the grid bubble above. A square-and-cross marking
+#: where two grid lines cross, never a column's real cross-section, load or
+#: material: CLAUDE.md's rule against inventing a structural design.
+COLUMN_MARKER_SIZE = 4.0
+
+
+def grid_intersections(x_axes, y_axes, *, labels=None) -> tuple[dict, ...]:
+    """Every x/y crossing of a structural grid: ``{"label", "at"}`` tuples.
+
+    Pure coordinate geometry over the same ``x_axes``/``y_axes`` ``arch_grid``
+    draws - refused the same way (``grid_axes``). A *candidate* column
+    location is only where two grid lines cross; nothing here sizes, loads or
+    otherwise designs a column.
+    """
+    axes = grid_axes(x_axes, y_axes, labels=labels)
+    out: list[dict] = []
+    for x_axis in axes["x"]:
+        for y_axis in axes["y"]:
+            out.append(
+                {
+                    "label": f"{x_axis['label']}/{y_axis['label']}",
+                    "at": (x_axis["position"], y_axis["position"]),
+                }
+            )
+    return tuple(out)
+
+
+def _column_marker(at: Pt, k: float) -> tuple[Prim, ...]:
+    half = COLUMN_MARKER_SIZE * k / 2.0
+    x, y = at
+    square = (
+        (x - half, y - half),
+        (x + half, y - half),
+        (x + half, y + half),
+        (x - half, y + half),
+    )
+    return (
+        Poly(square, True, "column"),
+        Line((x - half, y - half), (x + half, y + half), "column"),
+        Line((x - half, y + half), (x + half, y - half), "column"),
+    )
+
+
+def column_prims(x_axes, y_axes, *, labels=None, scale: float = 50) -> tuple[Prim, ...]:
+    """A fixed-size, unsized marker at every grid intersection, on the ``column`` role."""
+    k = _positive(scale, "scale")
+    prims: list[Prim] = []
+    for item in grid_intersections(x_axes, y_axes, labels=labels):
+        prims.extend(_column_marker(item["at"], k))
+    return tuple(prims)
+
+
 # -- the four symbols ----------------------------------------------------------
 
 
@@ -378,22 +433,37 @@ async def draw_grid(
     labels=None,
     extension: float = 1500.0,
     scale: float = 50,
+    columns: bool = False,
 ) -> dict:
-    """Draw :func:`grid_prims` through ``draw_prims`` with the arch role map."""
+    """Draw :func:`grid_prims` through ``draw_prims`` with the arch role map.
+
+    ``columns=True`` also draws an unsized candidate-column marker
+    (:func:`column_prims`) at every axis intersection, on its own
+    ``S-COLS-E-N`` layer - coordination only, never a column's real size.
+    """
     from engineering.mech.draw import draw_prims
 
     axes = grid_axes(x_axes, y_axes, labels=labels)
     prims = grid_prims(x_axes, y_axes, labels=labels, extension=extension, scale=scale)
+    layers = {ARCH_ROLE_LAYER["grid"], ARCH_ROLE_LAYER["symbol"]}
+    columns_out: tuple[dict, ...] = ()
+    if columns:
+        columns_out = grid_intersections(x_axes, y_axes, labels=labels)
+        prims = prims + column_prims(x_axes, y_axes, labels=labels, scale=scale)
+        layers.add(ARCH_ROLE_LAYER["column"])
     drawn = await draw_prims(backend, prims, role_layer=ARCH_ROLE_LAYER)
-    return {
+    result = {
         "ok": True,
         "axes": axes,
         "bubble_radius": BUBBLE_RADIUS * float(scale),
         "handles": drawn["handles"],
         "counts": drawn["counts"],
-        "layers": sorted({ARCH_ROLE_LAYER["grid"], ARCH_ROLE_LAYER["symbol"]}),
+        "layers": sorted(layers),
         "backend": backend.name,
     }
+    if columns:
+        result["columns"] = list(columns_out)
+    return result
 
 
 async def draw_symbol(
